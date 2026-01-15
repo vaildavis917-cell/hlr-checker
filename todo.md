@@ -94,3 +94,6 @@
 - [x] Fix HLR price from €0.02 to €0.01 per number
 - [x] Full localization: Russian, Ukrainian, English with language switcher button
 - [x] Complete localization - check all pages for untranslated text
+
+## Branding
+- [x] Generate and set favicon for the website
