@@ -1,31 +1,602 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { getLoginUrl } from "@/const";
-import { Streamdown } from 'streamdown';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { trpc } from "@/lib/trpc";
+import { useState, useMemo } from "react";
+import { 
+  Phone, 
+  Upload, 
+  Search, 
+  Download, 
+  CheckCircle2, 
+  XCircle, 
+  AlertCircle,
+  Loader2,
+  Wallet,
+  ArrowUpDown,
+  Filter
+} from "lucide-react";
+import { toast } from "sonner";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
- */
+type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported";
+type SortDirection = "asc" | "desc";
+
 export default function Home() {
-  // The userAuth hooks provides authentication state
-  // To implement login/logout functionality, simply call logout() or redirect to getLoginUrl()
-  let { user, loading, error, isAuthenticated, logout } = useAuth();
+  const [phoneInput, setPhoneInput] = useState("");
+  const [batchName, setBatchName] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [operatorFilter, setOperatorFilter] = useState<string>("all");
+  
+  // Sorting
+  const [sortField, setSortField] = useState<SortField>("phoneNumber");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  // API queries
+  const balanceQuery = trpc.hlr.getBalance.useQuery();
+  const batchesQuery = trpc.hlr.listBatches.useQuery();
+  const resultsQuery = trpc.hlr.getResults.useQuery(
+    { batchId: currentBatchId! },
+    { enabled: currentBatchId !== null }
+  );
+  const startBatchMutation = trpc.hlr.startBatch.useMutation();
+
+  // Parse phone numbers from input
+  const parsePhoneNumbers = (input: string): string[] => {
+    return input
+      .split(/[,\n]+/)
+      .map(num => num.trim())
+      .filter(num => num.length > 0);
+  };
+
+  // Handle file upload
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      // Parse CSV - assume first column is phone number
+      const lines = text.split("\n");
+      const numbers: string[] = [];
+      
+      lines.forEach((line, index) => {
+        if (index === 0 && line.toLowerCase().includes("phone")) return; // Skip header
+        const parts = line.split(/[,;]/);
+        if (parts[0]) {
+          const num = parts[0].trim().replace(/['"]/g, "");
+          if (num) numbers.push(num);
+        }
+      });
+      
+      setPhoneInput(numbers.join("\n"));
+      toast.success(`Loaded ${numbers.length} phone numbers from file`);
+    };
+    reader.readAsText(file);
+  };
+
+  // Start HLR check
+  const handleStartCheck = async () => {
+    const numbers = parsePhoneNumbers(phoneInput);
+    if (numbers.length === 0) {
+      toast.error("Please enter at least one phone number");
+      return;
+    }
+
+    if (numbers.length > 1000) {
+      toast.error("Maximum 1000 numbers per batch");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await startBatchMutation.mutateAsync({
+        name: batchName || undefined,
+        phoneNumbers: numbers,
+      });
+      
+      setCurrentBatchId(result.batchId);
+      setPhoneInput("");
+      setBatchName("");
+      batchesQuery.refetch();
+      resultsQuery.refetch();
+      toast.success(`Processed ${result.totalProcessed} numbers`);
+    } catch (error) {
+      toast.error("Failed to process numbers");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Export results to CSV
+  const handleExportCSV = () => {
+    if (!resultsQuery.data || resultsQuery.data.length === 0) {
+      toast.error("No results to export");
+      return;
+    }
+
+    const headers = [
+      "Phone Number",
+      "International Format",
+      "Valid",
+      "Reachable",
+      "Country",
+      "Country Code",
+      "Current Operator",
+      "Network Type",
+      "Original Operator",
+      "Ported",
+      "Roaming",
+      "Status"
+    ];
+
+    const rows = resultsQuery.data.map(r => [
+      r.phoneNumber,
+      r.internationalFormat || "",
+      r.validNumber || "",
+      r.reachable || "",
+      r.countryName || "",
+      r.countryCode || "",
+      r.currentCarrierName || "",
+      r.currentNetworkType || "",
+      r.originalCarrierName || "",
+      r.ported || "",
+      r.roaming || "",
+      r.status
+    ]);
+
+    const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hlr-results-${currentBatchId}-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Results exported successfully");
+  };
+
+  // Get unique values for filters
+  const filterOptions = useMemo(() => {
+    if (!resultsQuery.data) return { countries: [], operators: [] };
+    
+    const countries = Array.from(new Set(resultsQuery.data.map(r => r.countryName).filter(Boolean)));
+    const operators = Array.from(new Set(resultsQuery.data.map(r => r.currentCarrierName).filter(Boolean)));
+    
+    return { countries, operators };
+  }, [resultsQuery.data]);
+
+  // Filter and sort results
+  const filteredResults = useMemo(() => {
+    if (!resultsQuery.data) return [];
+    
+    let filtered = [...resultsQuery.data];
+    
+    // Apply filters
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(r => r.validNumber === statusFilter);
+    }
+    if (countryFilter !== "all") {
+      filtered = filtered.filter(r => r.countryName === countryFilter);
+    }
+    if (operatorFilter !== "all") {
+      filtered = filtered.filter(r => r.currentCarrierName === operatorFilter);
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      const aVal = a[sortField] || "";
+      const bVal = b[sortField] || "";
+      const comparison = String(aVal).localeCompare(String(bVal));
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+    
+    return filtered;
+  }, [resultsQuery.data, statusFilter, countryFilter, operatorFilter, sortField, sortDirection]);
+
+  // Toggle sort
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Get status badge
+  const getStatusBadge = (validNumber: string | null) => {
+    switch (validNumber) {
+      case "valid":
+        return <Badge className="bg-success text-success-foreground"><CheckCircle2 className="w-3 h-3 mr-1" />Valid</Badge>;
+      case "invalid":
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Invalid</Badge>;
+      default:
+        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />Unknown</Badge>;
+    }
+  };
+
+  const phoneCount = parsePhoneNumbers(phoneInput).length;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
-    </div>
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold tracking-tight">HLR Bulk Checker</h1>
+          <p className="text-muted-foreground">
+            Verify phone numbers in bulk using Seven.io HLR lookup
+          </p>
+        </div>
+
+        {/* Balance Card */}
+        <div className="flex items-center gap-4 p-4 rounded-lg border bg-card">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Wallet className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">API Balance</p>
+            <p className="text-xl font-semibold">
+              {balanceQuery.isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                `${balanceQuery.data?.balance?.toFixed(2) || "0.00"} ${balanceQuery.data?.currency || "EUR"}`
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Input Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="h-5 w-5" />
+                Phone Numbers
+              </CardTitle>
+              <CardDescription>
+                Enter phone numbers separated by comma or newline, or upload a CSV file
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="batchName">Batch Name (optional)</Label>
+                <Input
+                  id="batchName"
+                  placeholder="e.g., Campaign Q1 2026"
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                />
+              </div>
+
+              <Tabs defaultValue="text" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="text">Text Input</TabsTrigger>
+                  <TabsTrigger value="file">File Upload</TabsTrigger>
+                </TabsList>
+                <TabsContent value="text" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phones">Phone Numbers</Label>
+                    <Textarea
+                      id="phones"
+                      placeholder="+49176123456&#10;+44789012345&#10;+33612345678"
+                      className="min-h-[200px] font-mono text-sm"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {phoneCount} number{phoneCount !== 1 ? "s" : ""} detected
+                    </p>
+                  </div>
+                </TabsContent>
+                <TabsContent value="file" className="space-y-4">
+                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                    <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
+                    <Label htmlFor="file-upload" className="cursor-pointer">
+                      <span className="text-primary hover:underline">Click to upload</span>
+                      <span className="text-muted-foreground"> or drag and drop</span>
+                    </Label>
+                    <Input
+                      id="file-upload"
+                      type="file"
+                      accept=".csv,.txt"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      CSV or TXT file with phone numbers
+                    </p>
+                  </div>
+                  {phoneInput && (
+                    <p className="text-sm text-muted-foreground">
+                      {phoneCount} numbers loaded from file
+                    </p>
+                  )}
+                </TabsContent>
+              </Tabs>
+
+              <Button 
+                onClick={handleStartCheck} 
+                disabled={isProcessing || phoneCount === 0}
+                className="w-full"
+                size="lg"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Check {phoneCount} Number{phoneCount !== 1 ? "s" : ""}
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* History Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Check History</CardTitle>
+              <CardDescription>
+                View and manage your previous HLR checks
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {batchesQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : batchesQuery.data?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No checks yet</p>
+                  <p className="text-sm">Start by entering phone numbers above</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {batchesQuery.data?.map((batch) => (
+                    <div
+                      key={batch.id}
+                      className={`p-4 rounded-lg border cursor-pointer transition-all hover:border-primary/50 ${
+                        currentBatchId === batch.id ? "border-primary bg-primary/5" : ""
+                      }`}
+                      onClick={() => setCurrentBatchId(batch.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{batch.name || `Batch #${batch.id}`}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(batch.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={batch.status === "completed" ? "default" : "secondary"}>
+                              {batch.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {batch.validNumbers}/{batch.totalNumbers} valid
+                          </p>
+                        </div>
+                      </div>
+                      {batch.status === "processing" && (
+                        <Progress 
+                          value={(batch.processedNumbers / batch.totalNumbers) * 100} 
+                          className="mt-2"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Results Section */}
+        {currentBatchId && (
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Results</CardTitle>
+                  <CardDescription>
+                    {filteredResults.length} of {resultsQuery.data?.length || 0} results
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap gap-4 mt-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="valid">Valid</SelectItem>
+                      <SelectItem value="invalid">Invalid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Select value={countryFilter} onValueChange={setCountryFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Country" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Countries</SelectItem>
+                    {filterOptions.countries.map((country) => (
+                      <SelectItem key={country} value={country!}>{country}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={operatorFilter} onValueChange={setOperatorFilter}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Operator" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Operators</SelectItem>
+                    {filterOptions.operators.map((op) => (
+                      <SelectItem key={op} value={op!}>{op}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {resultsQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("phoneNumber")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Phone Number
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("validNumber")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Status
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("currentCarrierName")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Operator
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("countryName")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Country
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("roaming")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Roaming
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("ported")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Ported
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredResults.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No results match your filters
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredResults.map((result) => (
+                          <TableRow key={result.id}>
+                            <TableCell className="font-mono">
+                              {result.internationalFormat || result.phoneNumber}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(result.validNumber)}</TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{result.currentCarrierName || "-"}</p>
+                                <p className="text-xs text-muted-foreground">{result.currentNetworkType || ""}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span>{result.countryCode}</span>
+                                <span className="text-muted-foreground">{result.countryName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={result.roaming === "not_roaming" ? "secondary" : "outline"}>
+                                {result.roaming?.replace(/_/g, " ") || "-"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={result.ported?.includes("ported") ? "outline" : "secondary"}>
+                                {result.ported?.replace(/_/g, " ") || "-"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }

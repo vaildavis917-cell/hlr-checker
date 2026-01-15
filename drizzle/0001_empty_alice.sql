@@ -1,0 +1,41 @@
+CREATE TABLE `hlr_batches` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`name` varchar(255),
+	`totalNumbers` int NOT NULL DEFAULT 0,
+	`processedNumbers` int NOT NULL DEFAULT 0,
+	`validNumbers` int NOT NULL DEFAULT 0,
+	`invalidNumbers` int NOT NULL DEFAULT 0,
+	`status` enum('pending','processing','completed','failed') NOT NULL DEFAULT 'pending',
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`completedAt` timestamp,
+	CONSTRAINT `hlr_batches_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `hlr_results` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`batchId` int NOT NULL,
+	`phoneNumber` varchar(32) NOT NULL,
+	`internationalFormat` varchar(32),
+	`nationalFormat` varchar(32),
+	`countryCode` varchar(8),
+	`countryName` varchar(128),
+	`countryPrefix` varchar(8),
+	`currentCarrierName` varchar(255),
+	`currentCarrierCode` varchar(32),
+	`currentCarrierCountry` varchar(8),
+	`currentNetworkType` varchar(32),
+	`originalCarrierName` varchar(255),
+	`originalCarrierCode` varchar(32),
+	`validNumber` varchar(32),
+	`reachable` varchar(32),
+	`ported` varchar(64),
+	`roaming` varchar(64),
+	`gsmCode` varchar(16),
+	`gsmMessage` varchar(255),
+	`hlr_status` enum('success','error') NOT NULL DEFAULT 'success',
+	`errorMessage` text,
+	`rawResponse` json,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `hlr_results_id` PRIMARY KEY(`id`)
+);
