@@ -69,16 +69,15 @@ export default function AdminHistory() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-destructive">
                 <Shield className="h-6 w-6" />
-                Access Denied
+                {t.admin.accessDenied}
               </CardTitle>
               <CardDescription>
-                You don't have permission to access this page.
-                Only administrators can view all users' history.
+                {t.admin.accessDeniedDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Button onClick={() => setLocation("/")} className="w-full">
-                Go to Dashboard
+                {t.admin.goToDashboard}
               </Button>
             </CardContent>
           </Card>
@@ -164,21 +163,21 @@ export default function AdminHistory() {
 
   const handleExportCSV = () => {
     if (!batchResultsQuery.data?.results || batchResultsQuery.data.results.length === 0) {
-      toast.error("No results to export");
+      toast.error(t.home.noResultsMatch);
       return;
     }
 
     const headers = [
-      "Phone Number",
-      "International Format",
-      "Valid",
-      "Reachable",
-      "Country",
-      "Operator",
-      "Ported",
-      "Roaming",
-      "Health Score",
-      "Status"
+      t.fields.phoneNumber,
+      t.fields.internationalFormat,
+      t.fields.validNumber,
+      t.fields.reachable,
+      t.fields.countryName,
+      t.fields.currentCarrierName,
+      t.fields.ported,
+      t.fields.roaming,
+      t.fields.healthScore,
+      t.fields.status
     ];
 
     const rows = batchResultsQuery.data.results.map(r => [
@@ -202,17 +201,17 @@ export default function AdminHistory() {
     a.download = `hlr-results-batch-${selectedBatchId}-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Results exported successfully");
+    toast.success(t.home.exportCSV);
   };
 
   const getStatusBadge = (validNumber: string | null) => {
     switch (validNumber) {
       case "valid":
-        return <Badge className="bg-green-100 text-green-700 border-green-300"><CheckCircle2 className="w-3 h-3 mr-1" />Valid</Badge>;
+        return <Badge className="bg-green-100 text-green-700 border-green-300"><CheckCircle2 className="w-3 h-3 mr-1" />{t.home.statusValid}</Badge>;
       case "invalid":
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Invalid</Badge>;
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />{t.home.statusInvalid}</Badge>;
       default:
-        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />Unknown</Badge>;
+        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />{t.home.statusUnknown}</Badge>;
     }
   };
 
@@ -223,10 +222,10 @@ export default function AdminHistory() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <History className="h-8 w-8 text-primary" />
-            All Users History
+            {t.adminHistory.title}
           </h1>
           <p className="text-muted-foreground">
-            View HLR check history for all users and admins
+            {t.adminHistory.subtitle}
           </p>
         </div>
 
@@ -238,7 +237,7 @@ export default function AdminHistory() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by batch name or user..."
+                    placeholder={t.adminHistory.searchPlaceholder}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-9"
@@ -247,10 +246,10 @@ export default function AdminHistory() {
               </div>
               <Select value={userFilter} onValueChange={setUserFilter}>
                 <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Filter by user" />
+                  <SelectValue placeholder={t.adminHistory.filterByUser} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Users</SelectItem>
+                  <SelectItem value="all">{t.adminHistory.allUsers}</SelectItem>
                   {uniqueUsers.map((u) => (
                     <SelectItem key={u.username} value={u.username}>
                       {u.name} (@{u.username})
@@ -265,9 +264,9 @@ export default function AdminHistory() {
         {/* Batches Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Check History</CardTitle>
+            <CardTitle>{t.adminHistory.checkHistory}</CardTitle>
             <CardDescription>
-              {filteredBatches.length} batch{filteredBatches.length !== 1 ? "es" : ""} found
+              {filteredBatches.length} {t.adminHistory.batchesFound}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -286,17 +285,17 @@ export default function AdminHistory() {
                       >
                         <div className="flex items-center gap-1">
                           <UserIcon className="h-4 w-4" />
-                          User
+                          {t.admin.user}
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead>Batch Name</TableHead>
+                      <TableHead>{t.history.batchName}</TableHead>
                       <TableHead 
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleSort("totalNumbers")}
                       >
                         <div className="flex items-center gap-1">
-                          Total
+                          {t.history.total}
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
@@ -305,28 +304,28 @@ export default function AdminHistory() {
                         onClick={() => toggleSort("validNumbers")}
                       >
                         <div className="flex items-center gap-1">
-                          Valid
+                          {t.home.valid}
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>{t.status}</TableHead>
                       <TableHead 
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleSort("createdAt")}
                       >
                         <div className="flex items-center gap-1">
-                          Date
+                          {t.date}
                           <ArrowUpDown className="h-3 w-3" />
                         </div>
                       </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right">{t.actions}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredBatches.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          No batches found
+                          {t.history.noBatches}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -356,7 +355,7 @@ export default function AdminHistory() {
                           </TableCell>
                           <TableCell>
                             <Badge variant={batch.status === "completed" ? "default" : "secondary"}>
-                              {batch.status}
+                              {batch.status === "completed" ? t.history.completed : batch.status}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-muted-foreground">
@@ -369,7 +368,7 @@ export default function AdminHistory() {
                               onClick={() => handleViewResults(batch.id)}
                             >
                               <Eye className="h-4 w-4 mr-1" />
-                              View
+                              {t.view}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -387,15 +386,15 @@ export default function AdminHistory() {
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
-                <span>Batch Results</span>
+                <span>{t.adminHistory.batchResults}</span>
                 <Button variant="outline" size="sm" onClick={handleExportCSV}>
                   <Download className="h-4 w-4 mr-2" />
-                  Export CSV
+                  {t.home.exportCSV}
                 </Button>
               </DialogTitle>
               <DialogDescription>
                 {batchResultsQuery.data?.batch?.name || `Batch #${selectedBatchId}`} - 
-                {batchResultsQuery.data?.total || 0} results
+                {batchResultsQuery.data?.total || 0} {t.home.results}
               </DialogDescription>
             </DialogHeader>
 
@@ -408,13 +407,13 @@ export default function AdminHistory() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Phone Number</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Health</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead>Operator</TableHead>
-                      <TableHead>Ported</TableHead>
-                      <TableHead>Roaming</TableHead>
+                      <TableHead>{t.home.phoneNumber}</TableHead>
+                      <TableHead>{t.status}</TableHead>
+                      <TableHead>{t.home.health}</TableHead>
+                      <TableHead>{t.home.country}</TableHead>
+                      <TableHead>{t.home.operator}</TableHead>
+                      <TableHead>{t.home.ported}</TableHead>
+                      <TableHead>{t.home.roaming}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -434,12 +433,12 @@ export default function AdminHistory() {
                         <TableCell>{result.currentCarrierName || "-"}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {result.ported?.replace(/_/g, " ") || "-"}
+                            {result.ported ? (t.portedStatus as any)[result.ported] || result.ported : "-"}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">
-                            {result.roaming?.replace(/_/g, " ") || "-"}
+                            {result.roaming ? (t.roamingStatus as any)[result.roaming] || result.roaming : "-"}
                           </Badge>
                         </TableCell>
                       </TableRow>

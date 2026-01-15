@@ -63,15 +63,12 @@ import { useLanguage } from "@/contexts/LanguageContext";
 type User = {
   id: number;
   username: string;
-  passwordHash: string;
   name: string | null;
   email: string | null;
   role: "user" | "admin";
   isActive: "yes" | "no";
   dailyLimit: number | null;
   monthlyLimit: number | null;
-  failedLoginAttempts: number;
-  lockedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
   lastSignedIn: Date;
@@ -90,39 +87,13 @@ export default function Admin() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<"user" | "admin">("user");
+  
+  // Limits dialog state
   const [isLimitsDialogOpen, setIsLimitsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [dailyLimit, setDailyLimit] = useState(0);
   const [monthlyLimit, setMonthlyLimit] = useState(0);
 
-  // Check if user is admin
-  if (user && user.role !== "admin") {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Card className="max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <Shield className="h-6 w-6" />
-                Access Denied
-              </CardTitle>
-              <CardDescription>
-                You don't have permission to access the admin panel.
-                Only administrators can manage users.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => setLocation("/")} className="w-full">
-                Go to Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  // API queries
   const usersQuery = trpc.admin.listUsers.useQuery();
   const createUserMutation = trpc.admin.createUser.useMutation();
   const deleteUserMutation = trpc.admin.deleteUser.useMutation();
@@ -131,13 +102,31 @@ export default function Admin() {
   const resetPasswordMutation = trpc.admin.resetUserPassword.useMutation();
   const updateLimitsMutation = trpc.admin.updateUserLimits.useMutation();
 
+  // Check if user is admin
+  if (user?.role !== "admin") {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <Shield className="h-16 w-16 text-muted-foreground mb-4" />
+          <h1 className="text-2xl font-bold mb-2">{t.admin.accessDenied}</h1>
+          <p className="text-muted-foreground mb-4">
+            {t.admin.accessDeniedDesc}
+          </p>
+          <Button onClick={() => setLocation("/")}>
+            {t.admin.goToDashboard}
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   const handleCreateUser = async () => {
     if (!newUsername || !newPassword) {
-      toast.error("Username and password are required");
+      toast.error(t.admin.usernameRequired);
       return;
     }
     if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      toast.error(t.admin.minChars);
       return;
     }
 
@@ -150,38 +139,43 @@ export default function Admin() {
         role: newRole,
       });
       usersQuery.refetch();
-      
-      // Reset form
+      setIsCreateDialogOpen(false);
       setNewUsername("");
       setNewPassword("");
       setNewName("");
       setNewEmail("");
       setNewRole("user");
-      setIsCreateDialogOpen(false);
-      
-      toast.success("User created successfully!");
+      toast.success(t.admin.userCreated);
     } catch (error: any) {
-      toast.error(error.message || "Failed to create user");
+      toast.error(error.message || t.admin.usernameExists);
     }
   };
 
   const handleDeleteUser = async (userId: number) => {
+    if (userId === user?.id) {
+      toast.error(t.admin.cannotDeleteSelf);
+      return;
+    }
     try {
       await deleteUserMutation.mutateAsync({ userId });
       usersQuery.refetch();
-      toast.success("User deleted successfully");
+      toast.success(t.admin.userDeleted);
     } catch (error) {
-      toast.error("Failed to delete user");
+      toast.error(t.admin.userDeleted);
     }
   };
 
   const handleUpdateRole = async (userId: number, role: "user" | "admin") => {
+    if (userId === user?.id && role !== "admin") {
+      toast.error(t.admin.cannotDemoteSelf);
+      return;
+    }
     try {
       await updateRoleMutation.mutateAsync({ userId, role });
       usersQuery.refetch();
-      toast.success(`User role updated to ${role}`);
+      toast.success(t.admin.roleUpdated);
     } catch (error) {
-      toast.error("Failed to update user role");
+      toast.error(t.admin.roleUpdated);
     }
   };
 
@@ -189,24 +183,24 @@ export default function Admin() {
     try {
       await toggleActiveMutation.mutateAsync({ userId, isActive });
       usersQuery.refetch();
-      toast.success(isActive === "yes" ? "User activated" : "User deactivated");
+      toast.success(isActive === "yes" ? t.admin.userActivated : t.admin.userDeactivated);
     } catch (error) {
-      toast.error("Failed to update user status");
+      toast.error(t.admin.userDeactivated);
     }
   };
 
   const handleResetPassword = async (userId: number, username: string) => {
-    const newPassword = prompt(`Enter new password for ${username} (min 6 characters):`);
+    const newPassword = prompt(`${t.admin.enterNewPassword} ${username} (${t.admin.minChars}):`);
     if (!newPassword) return;
     if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      toast.error(t.admin.minChars);
       return;
     }
     try {
       await resetPasswordMutation.mutateAsync({ userId, newPassword });
-      toast.success("Password reset successfully");
+      toast.success(t.admin.passwordReset);
     } catch (error) {
-      toast.error("Failed to reset password");
+      toast.error(t.admin.passwordReset);
     }
   };
 
@@ -227,9 +221,9 @@ export default function Admin() {
       });
       usersQuery.refetch();
       setIsLimitsDialogOpen(false);
-      toast.success("Limits updated successfully");
+      toast.success(t.admin.limitsUpdated);
     } catch (error) {
-      toast.error("Failed to update limits");
+      toast.error(t.admin.limitsUpdated);
     }
   };
 
@@ -240,10 +234,10 @@ export default function Admin() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <ShieldCheck className="h-8 w-8 text-primary" />
-            Admin Panel
+            {t.admin.title}
           </h1>
           <p className="text-muted-foreground">
-            Manage users for the HLR Checker
+            {t.admin.subtitle}
           </p>
         </div>
 
@@ -253,43 +247,43 @@ export default function Admin() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                All Users
+                {t.admin.allUsers}
               </CardTitle>
               <CardDescription>
-                {usersQuery.data?.length || 0} registered users
+                {usersQuery.data?.length || 0} {t.admin.registeredUsers}
               </CardDescription>
             </div>
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <UserPlus className="h-4 w-4" />
-                  Create User
+                  {t.admin.createUser}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create New User</DialogTitle>
+                  <DialogTitle>{t.admin.createNewUser}</DialogTitle>
                   <DialogDescription>
-                    Create a new user account with login credentials
+                    {t.admin.createNewUserDesc}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username *</Label>
+                    <Label htmlFor="username">{t.admin.usernameRequired}</Label>
                     <Input
                       id="username"
-                      placeholder="Enter username"
+                      placeholder={t.auth.enterUsername}
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Password *</Label>
+                    <Label htmlFor="password">{t.admin.passwordRequired}</Label>
                     <div className="relative">
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter password (min 6 characters)"
+                        placeholder={`${t.auth.enterPassword} (${t.admin.minChars})`}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                       />
@@ -305,40 +299,40 @@ export default function Admin() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="name">Display Name</Label>
+                    <Label htmlFor="name">{t.admin.displayName} ({t.admin.optional})</Label>
                     <Input
                       id="name"
-                      placeholder="Enter display name (optional)"
+                      placeholder={t.admin.displayName}
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{t.admin.email} ({t.admin.optional})</Label>
                     <Input
                       id="email"
                       type="email"
-                      placeholder="Enter email (optional)"
+                      placeholder="email@example.com"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="role">Role</Label>
+                    <Label htmlFor="role">{t.admin.role}</Label>
                     <Select value={newRole} onValueChange={(v: "user" | "admin") => setNewRole(v)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="user">{t.admin.user}</SelectItem>
+                        <SelectItem value="admin">{t.nav.admin}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Cancel
+                    {t.cancel}
                   </Button>
                   <Button 
                     onClick={handleCreateUser}
@@ -349,7 +343,7 @@ export default function Admin() {
                     ) : (
                       <UserPlus className="h-4 w-4 mr-2" />
                     )}
-                    Create User
+                    {t.admin.createUser}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -365,13 +359,13 @@ export default function Admin() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Username</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Sign In</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t.admin.user}</TableHead>
+                      <TableHead>{t.auth.username}</TableHead>
+                      <TableHead>{t.admin.email}</TableHead>
+                      <TableHead>{t.admin.role}</TableHead>
+                      <TableHead>{t.status}</TableHead>
+                      <TableHead>{t.admin.lastSignIn}</TableHead>
+                      <TableHead className="text-right">{t.actions}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -386,7 +380,7 @@ export default function Admin() {
                             </div>
                             <span className="font-medium">{u.name || u.username}</span>
                             {u.id === user?.id && (
-                              <Badge variant="outline" className="text-xs">You</Badge>
+                              <Badge variant="outline" className="text-xs">{t.admin.you}</Badge>
                             )}
                           </div>
                         </TableCell>
@@ -406,14 +400,14 @@ export default function Admin() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="user">User</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="user">{t.admin.user}</SelectItem>
+                              <SelectItem value="admin">{t.nav.admin}</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell>
                           <Badge variant={u.isActive === "yes" ? "default" : "secondary"}>
-                            {u.isActive === "yes" ? "Active" : "Inactive"}
+                            {u.isActive === "yes" ? t.admin.active : t.admin.inactive}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
@@ -427,7 +421,7 @@ export default function Admin() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleResetPassword(u.id, u.username)}
-                                  title="Reset password"
+                                  title={t.admin.resetPassword}
                                 >
                                   <KeyRound className="h-4 w-4 text-blue-500" />
                                 </Button>
@@ -435,7 +429,7 @@ export default function Admin() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => openLimitsDialog(u)}
-                                  title="Set limits"
+                                  title={t.admin.setLimits}
                                 >
                                   <Settings2 className="h-4 w-4 text-purple-500" />
                                 </Button>
@@ -443,7 +437,7 @@ export default function Admin() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleToggleActive(u.id, u.isActive === "yes" ? "no" : "yes")}
-                                  title={u.isActive === "yes" ? "Deactivate user" : "Activate user"}
+                                  title={u.isActive === "yes" ? t.admin.deactivateUser : t.admin.activateUser}
                                 >
                                   {u.isActive === "yes" ? (
                                     <UserX className="h-4 w-4 text-orange-500" />
@@ -459,19 +453,19 @@ export default function Admin() {
                                   </AlertDialogTrigger>
                                   <AlertDialogContent>
                                     <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                      <AlertDialogTitle>{t.admin.deleteUser}</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        Are you sure you want to delete {u.name || u.username}? 
-                                        This will also delete all their HLR check history.
+                                        {t.admin.deleteUserConfirm} {u.name || u.username}? 
+                                        {t.admin.deleteUserDesc}
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                                       <AlertDialogAction
                                         onClick={() => handleDeleteUser(u.id)}
                                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                       >
-                                        Delete
+                                        {t.delete}
                                       </AlertDialogAction>
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
@@ -485,7 +479,7 @@ export default function Admin() {
                     {(!usersQuery.data || usersQuery.data.length === 0) && (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          No users found
+                          {t.admin.allUsers}
                         </TableCell>
                       </TableRow>
                     )}
@@ -500,45 +494,45 @@ export default function Admin() {
         <Dialog open={isLimitsDialogOpen} onOpenChange={setIsLimitsDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Set User Limits</DialogTitle>
+              <DialogTitle>{t.admin.setUserLimits}</DialogTitle>
               <DialogDescription>
-                Configure daily and monthly check limits for {selectedUser?.name || selectedUser?.username}.
-                Set to 0 for unlimited.
+                {t.admin.setUserLimitsDesc} {selectedUser?.name || selectedUser?.username}.
+                {t.admin.zeroUnlimited}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="dailyLimit">Daily Limit</Label>
+                <Label htmlFor="dailyLimit">{t.admin.dailyLimit}</Label>
                 <Input
                   id="dailyLimit"
                   type="number"
                   min="0"
                   value={dailyLimit}
                   onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
-                  placeholder="0 = Unlimited"
+                  placeholder={t.admin.zeroUnlimited}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="monthlyLimit">Monthly Limit</Label>
+                <Label htmlFor="monthlyLimit">{t.admin.monthlyLimit}</Label>
                 <Input
                   id="monthlyLimit"
                   type="number"
                   min="0"
                   value={monthlyLimit}
                   onChange={(e) => setMonthlyLimit(parseInt(e.target.value) || 0)}
-                  placeholder="0 = Unlimited"
+                  placeholder={t.admin.zeroUnlimited}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsLimitsDialogOpen(false)}>
-                Cancel
+                {t.cancel}
               </Button>
               <Button onClick={handleUpdateLimits} disabled={updateLimitsMutation.isPending}>
                 {updateLimitsMutation.isPending ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t.loading}</>
                 ) : (
-                  "Save Limits"
+                  t.save
                 )}
               </Button>
             </DialogFooter>

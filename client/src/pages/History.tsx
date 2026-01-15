@@ -22,7 +22,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
 import { 
   History as HistoryIcon, 
   Trash2, 
@@ -34,8 +33,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function History() {
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const batchesQuery = trpc.hlr.listBatches.useQuery();
   const deleteBatchMutation = trpc.hlr.deleteBatch.useMutation();
@@ -44,9 +45,9 @@ export default function History() {
     try {
       await deleteBatchMutation.mutateAsync({ batchId });
       batchesQuery.refetch();
-      toast.success("Batch deleted successfully");
+      toast.success(t.history.batchDeleted);
     } catch (error) {
-      toast.error("Failed to delete batch");
+      toast.error(t.history.batchDeleted);
     }
   };
 
@@ -66,13 +67,13 @@ export default function History() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-success text-success-foreground">Completed</Badge>;
+        return <Badge className="bg-success text-success-foreground">{t.history.completed}</Badge>;
       case "failed":
-        return <Badge variant="destructive">Failed</Badge>;
+        return <Badge variant="destructive">{t.home.statusInvalid}</Badge>;
       case "processing":
-        return <Badge variant="secondary">Processing</Badge>;
+        return <Badge variant="secondary">{t.home.processing}</Badge>;
       default:
-        return <Badge variant="outline">Pending</Badge>;
+        return <Badge variant="outline">{t.home.statusUnknown}</Badge>;
     }
   };
 
@@ -83,19 +84,19 @@ export default function History() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <HistoryIcon className="h-8 w-8" />
-            Check History
+            {t.history.title}
           </h1>
           <p className="text-muted-foreground">
-            View and manage all your previous HLR verification batches
+            {t.history.subtitle}
           </p>
         </div>
 
         {/* History Table */}
         <Card>
           <CardHeader>
-            <CardTitle>All Batches</CardTitle>
+            <CardTitle>{t.history.title}</CardTitle>
             <CardDescription>
-              {batchesQuery.data?.length || 0} total batches
+              {batchesQuery.data?.length || 0} {t.history.total}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -106,14 +107,14 @@ export default function History() {
             ) : batchesQuery.data?.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <HistoryIcon className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                <p className="text-lg font-medium">No history yet</p>
-                <p className="text-sm mt-1">Start checking phone numbers to see your history here</p>
+                <p className="text-lg font-medium">{t.history.noBatches}</p>
+                <p className="text-sm mt-1">{t.home.startByEntering}</p>
                 <Button 
                   variant="outline" 
                   className="mt-4"
                   onClick={() => setLocation("/")}
                 >
-                  Go to HLR Checker
+                  {t.nav.hlrChecker}
                 </Button>
               </div>
             ) : (
@@ -121,14 +122,14 @@ export default function History() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Batch Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
-                      <TableHead className="text-center">Valid</TableHead>
-                      <TableHead className="text-center">Invalid</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Completed</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t.history.batchName}</TableHead>
+                      <TableHead>{t.status}</TableHead>
+                      <TableHead className="text-center">{t.history.total}</TableHead>
+                      <TableHead className="text-center">{t.home.statusValid}</TableHead>
+                      <TableHead className="text-center">{t.home.statusInvalid}</TableHead>
+                      <TableHead>{t.date}</TableHead>
+                      <TableHead>{t.history.completed}</TableHead>
+                      <TableHead className="text-right">{t.actions}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -178,19 +179,18 @@ export default function History() {
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Batch</AlertDialogTitle>
+                                  <AlertDialogTitle>{t.history.deleteConfirm}</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Are you sure you want to delete this batch? This action cannot be undone.
-                                    All {batch.totalNumbers} results will be permanently removed.
+                                    {t.history.deleteConfirmDesc}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() => handleDelete(batch.id)}
                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                   >
-                                    Delete
+                                    {t.delete}
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
