@@ -91,7 +91,7 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
               {data.estimatedCost.toFixed(2)} {data.currency}
             </span>
             <span className="text-xs text-muted-foreground">
-              (€0.02/{t.cost.perNumber})
+              (€0.01/{t.cost.perNumber})
             </span>
           </div>
         </div>

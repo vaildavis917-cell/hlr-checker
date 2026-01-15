@@ -114,7 +114,7 @@ describe("Duplicate Detection", () => {
       phoneNumbers: ["+49123456789", "+44789012345", "+33612345678"],
     });
 
-    expect(result.estimatedCost).toBe(0.06); // 3 * 0.02
+    expect(result.estimatedCost).toBe(0.03); // 3 * 0.01
     expect(result.currency).toBe("EUR");
   });
 
@@ -140,8 +140,8 @@ describe("Cost Calculator", () => {
     const result = await caller.hlr.getCostEstimate({ count: 100 });
 
     expect(result.count).toBe(100);
-    expect(result.costPerLookup).toBe(0.02);
-    expect(result.totalCost).toBe(2.0);
+    expect(result.costPerLookup).toBe(0.01);
+    expect(result.totalCost).toBe(1.0);
     expect(result.currency).toBe("EUR");
   });
 
@@ -151,7 +151,7 @@ describe("Cost Calculator", () => {
 
     const result = await caller.hlr.getCostEstimate({ count: 1 });
 
-    expect(result.totalCost).toBe(0.02);
+    expect(result.totalCost).toBe(0.01);
   });
 });
 

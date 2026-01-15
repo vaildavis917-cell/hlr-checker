@@ -76,7 +76,7 @@ interface SevenIoHlrResponse {
 }
 
 // Cost per HLR lookup in EUR (Seven.io pricing)
-const HLR_COST_PER_LOOKUP = 0.02;
+const HLR_COST_PER_LOOKUP = 0.01;
 
 // Available export fields
 export const EXPORT_FIELDS = [
