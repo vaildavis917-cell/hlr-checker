@@ -74,3 +74,8 @@
 ## UI Restrictions
 - [x] Balance visible only to admin users
 - [x] Single phone number check (quick check without batch)
+
+## Password Management Fix
+- [x] Remove Profile page (users cannot change their own password)
+- [x] Only admin can change passwords (for self and other users)
+- [x] Remove Profile from sidebar menu for regular users

@@ -286,22 +286,6 @@ export const appRouter = router({
       return { success: true } as const;
     }),
 
-    // Change own password
-    changePassword: protectedProcedure
-      .input(z.object({
-        currentPassword: z.string(),
-        newPassword: z.string().min(6).max(128),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const result = await import("./db").then(m => m.verifyPassword(ctx.user.username, input.currentPassword));
-        if (!result.user) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Current password is incorrect" });
-        }
-        await updateUserPassword(ctx.user.id, input.newPassword);
-        await logAction({ userId: ctx.user.id, action: "change_password", details: "Changed own password" });
-        return { success: true };
-      }),
-
     // Check if initial setup is needed (no admin exists)
     needsSetup: publicProcedure.query(async () => {
       const hasAdmin = await hasAnyAdmin();

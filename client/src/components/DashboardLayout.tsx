@@ -32,7 +32,7 @@ const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; labe
   { icon: LayoutDashboard, label: "HLR Checker", path: "/" },
   { icon: History, label: "History", path: "/history" },
   { icon: BarChart3, label: "Statistics", path: "/statistics" },
-  { icon: User, label: "Profile", path: "/profile" },
+
   { icon: ShieldCheck, label: "Admin", path: "/admin", adminOnly: true },
 ];
 
