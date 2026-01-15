@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
+import AdminHistory from "./pages/AdminHistory";
 import Login from "./pages/Login";
 
 import Statistics from "./pages/Statistics";
@@ -19,6 +20,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/history"} component={History} />
       <Route path={"/admin"} component={Admin} />
+      <Route path={"/admin/history"} component={AdminHistory} />
 
       <Route path={"/statistics"} component={Statistics} />
       <Route path={"/404"} component={NotFound} />

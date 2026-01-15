@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, History, ShieldCheck, Sun, Moon, User, BarChart3 } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, History, ShieldCheck, Sun, Moon, User, BarChart3, ClipboardList } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -32,8 +32,8 @@ const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; labe
   { icon: LayoutDashboard, label: "HLR Checker", path: "/" },
   { icon: History, label: "History", path: "/history" },
   { icon: BarChart3, label: "Statistics", path: "/statistics" },
-
   { icon: ShieldCheck, label: "Admin", path: "/admin", adminOnly: true },
+  { icon: ClipboardList, label: "All History", path: "/admin/history", adminOnly: true },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

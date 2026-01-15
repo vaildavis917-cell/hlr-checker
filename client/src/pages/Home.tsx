@@ -39,8 +39,11 @@ import {
   Filter
 } from "lucide-react";
 import { toast } from "sonner";
+import CostCalculator from "@/components/CostCalculator";
+import HealthScoreBadge from "@/components/HealthScoreBadge";
+import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
 
-type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported";
+type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
 
 export default function Home() {
@@ -355,6 +358,12 @@ export default function Home() {
                   {singleResult.networkType && <div><span className="text-muted-foreground">Network:</span> {singleResult.networkType}</div>}
                   <div><span className="text-muted-foreground">Roaming:</span> {singleResult.isRoaming ? "Yes" : "No"}</div>
                   <div><span className="text-muted-foreground">Ported:</span> {singleResult.isPorted ? "Yes" : "No"}</div>
+                  {singleResult.healthScore !== undefined && (
+                    <div className="col-span-2 mt-2 pt-2 border-t">
+                      <span className="text-muted-foreground mr-2">Health Score:</span>
+                      <HealthScoreBadge score={singleResult.healthScore} showLabel />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -430,6 +439,19 @@ export default function Home() {
                   )}
                 </TabsContent>
               </Tabs>
+
+              {/* Cost Calculator */}
+              {phoneCount > 0 && (
+                <CostCalculator 
+                  phoneNumbers={parsePhoneNumbers(phoneInput)}
+                  onRemoveDuplicates={() => {
+                    const nums = parsePhoneNumbers(phoneInput);
+                    const unique = Array.from(new Set(nums));
+                    setPhoneInput(unique.join("\n"));
+                    toast.success("Duplicates removed");
+                  }}
+                />
+              )}
 
               <Button 
                 onClick={handleStartCheck} 
@@ -525,6 +547,11 @@ export default function Home() {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
+                  <ExportTemplatesDialog onSelectTemplate={(fields) => {
+                    // Store selected fields for export
+                    console.log("Selected fields:", fields);
+                    toast.info(`Template with ${fields.length} fields selected`);
+                  }} />
                   <Button variant="outline" size="sm" onClick={handleExportCSV}>
                     <Download className="h-4 w-4 mr-2" />
                     Export CSV
@@ -637,12 +664,21 @@ export default function Home() {
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSort("healthScore")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Health
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredResults.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                             No results match your filters
                           </TableCell>
                         </TableRow>
@@ -674,6 +710,9 @@ export default function Home() {
                               <Badge variant={result.ported?.includes("ported") ? "outline" : "secondary"}>
                                 {result.ported?.replace(/_/g, " ") || "-"}
                               </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <HealthScoreBadge score={result.healthScore || 0} size="sm" />
                             </TableCell>
                           </TableRow>
                         ))

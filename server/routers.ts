@@ -29,6 +29,15 @@ import {
   upsertBalanceAlert,
   getStatistics,
   getHlrResultsByBatchIdPaginated,
+  createExportTemplate,
+  getExportTemplatesByUserId,
+  getExportTemplateById,
+  updateExportTemplate,
+  deleteExportTemplate,
+  getDefaultExportTemplate,
+  calculateHealthScore,
+  calculateBatchHealthScores,
+  getAllBatches,
 } from "./db";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
@@ -66,6 +75,29 @@ interface SevenIoHlrResponse {
   gsm_message: string | null;
 }
 
+// Cost per HLR lookup in EUR (Seven.io pricing)
+const HLR_COST_PER_LOOKUP = 0.02;
+
+// Available export fields
+export const EXPORT_FIELDS = [
+  { key: "phoneNumber", label: "Phone Number" },
+  { key: "internationalFormat", label: "International Format" },
+  { key: "nationalFormat", label: "National Format" },
+  { key: "validNumber", label: "Valid" },
+  { key: "reachable", label: "Reachable" },
+  { key: "countryName", label: "Country" },
+  { key: "countryCode", label: "Country Code" },
+  { key: "countryPrefix", label: "Country Prefix" },
+  { key: "currentCarrierName", label: "Current Operator" },
+  { key: "currentNetworkType", label: "Network Type" },
+  { key: "originalCarrierName", label: "Original Operator" },
+  { key: "ported", label: "Ported" },
+  { key: "roaming", label: "Roaming" },
+  { key: "healthScore", label: "Health Score" },
+  { key: "status", label: "Status" },
+  { key: "errorMessage", label: "Error Message" },
+] as const;
+
 // Function to perform HLR lookup via Seven.io API
 async function performHlrLookup(phoneNumber: string): Promise<SevenIoHlrResponse | { error: string }> {
   const apiKey = process.env.SEVEN_IO_API_KEY;
@@ -94,6 +126,30 @@ async function performHlrLookup(phoneNumber: string): Promise<SevenIoHlrResponse
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Unknown error" };
   }
+}
+
+// Detect duplicates in phone number list
+function detectDuplicates(phoneNumbers: string[]): { unique: string[]; duplicates: { number: string; count: number }[] } {
+  const countMap = new Map<string, number>();
+  
+  phoneNumbers.forEach(num => {
+    const normalized = num.trim();
+    if (normalized) {
+      countMap.set(normalized, (countMap.get(normalized) || 0) + 1);
+    }
+  });
+  
+  const unique: string[] = [];
+  const duplicates: { number: string; count: number }[] = [];
+  
+  countMap.forEach((count, number) => {
+    unique.push(number);
+    if (count > 1) {
+      duplicates.push({ number, count });
+    }
+  });
+  
+  return { unique, duplicates };
 }
 
 // Admin-only procedure
@@ -214,6 +270,47 @@ const adminRouter = router({
     return await getStatistics();
   }),
 
+  // Get all batches from all users (admin only)
+  listAllBatches: adminProcedure.query(async () => {
+    const batches = await getAllBatches();
+    const users = await getAllUsers();
+    const userMap = new Map(users.map(u => [u.id, u]));
+    
+    return batches.map(batch => ({
+      ...batch,
+      userName: userMap.get(batch.userId)?.name || userMap.get(batch.userId)?.username || `User #${batch.userId}`,
+      userUsername: userMap.get(batch.userId)?.username || `user_${batch.userId}`,
+    }));
+  }),
+
+  // Get results for any batch (admin only)
+  getBatchResults: adminProcedure
+    .input(z.object({ 
+      batchId: z.number(),
+      page: z.number().default(1),
+      pageSize: z.number().default(50),
+    }))
+    .query(async ({ input }) => {
+      const batch = await getHlrBatchById(input.batchId);
+      if (!batch) {
+        return { results: [], total: 0, pages: 0, batch: null };
+      }
+      const paginatedResults = await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
+      
+      // Add health scores to results
+      const resultsWithScores = paginatedResults.results.map(result => ({
+        ...result,
+        healthScore: calculateHealthScore(result),
+      }));
+      
+      return {
+        results: resultsWithScores,
+        total: paginatedResults.total,
+        pages: paginatedResults.pages,
+        batch,
+      };
+    }),
+
   // Balance alert settings
   getBalanceAlert: adminProcedure.query(async () => {
     return await getBalanceAlert();
@@ -227,9 +324,79 @@ const adminRouter = router({
     }),
 });
 
+// Export templates router
+const exportTemplatesRouter = router({
+  // List user's export templates
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return await getExportTemplatesByUserId(ctx.user.id);
+  }),
+
+  // Get available fields
+  getAvailableFields: protectedProcedure.query(() => {
+    return EXPORT_FIELDS;
+  }),
+
+  // Create new template
+  create: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(128),
+      fields: z.array(z.string()).min(1),
+      isDefault: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const templateId = await createExportTemplate({
+        userId: ctx.user.id,
+        name: input.name,
+        fields: input.fields,
+        isDefault: input.isDefault ? "yes" : "no",
+      });
+      return { templateId };
+    }),
+
+  // Update template
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).max(128).optional(),
+      fields: z.array(z.string()).min(1).optional(),
+      isDefault: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const template = await getExportTemplateById(input.id);
+      if (!template || template.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      }
+      
+      await updateExportTemplate(input.id, {
+        name: input.name,
+        fields: input.fields,
+        isDefault: input.isDefault !== undefined ? (input.isDefault ? "yes" : "no") : undefined,
+      });
+      return { success: true };
+    }),
+
+  // Delete template
+  delete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const template = await getExportTemplateById(input.id);
+      if (!template || template.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+      }
+      await deleteExportTemplate(input.id);
+      return { success: true };
+    }),
+
+  // Get default template
+  getDefault: protectedProcedure.query(async ({ ctx }) => {
+    return await getDefaultExportTemplate(ctx.user.id);
+  }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   admin: adminRouter,
+  exportTemplates: exportTemplatesRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     
@@ -326,6 +493,23 @@ export const appRouter = router({
   }),
 
   hlr: router({
+    // Analyze phone numbers before checking (duplicates, cost estimate)
+    analyzeNumbers: protectedProcedure
+      .input(z.object({ phoneNumbers: z.array(z.string()) }))
+      .mutation(async ({ input }) => {
+        const { unique, duplicates } = detectDuplicates(input.phoneNumbers);
+        const estimatedCost = unique.length * HLR_COST_PER_LOOKUP;
+        
+        return {
+          totalInput: input.phoneNumbers.length,
+          uniqueCount: unique.length,
+          duplicateCount: input.phoneNumbers.length - unique.length,
+          duplicates,
+          estimatedCost,
+          currency: "EUR",
+        };
+      }),
+
     // Single phone number check (quick check)
     checkSingle: protectedProcedure
       .input(z.object({ phoneNumber: z.string().min(1) }))
@@ -347,8 +531,19 @@ export const appRouter = router({
             success: false,
             phoneNumber: input.phoneNumber,
             error: hlrResponse.error,
+            healthScore: 0,
           };
         }
+
+        // Calculate health score
+        const mockResult = {
+          validNumber: hlrResponse.valid_number,
+          reachable: hlrResponse.reachable,
+          ported: hlrResponse.ported,
+          roaming: hlrResponse.roaming,
+          currentNetworkType: hlrResponse.current_carrier?.network_type,
+        };
+        const healthScore = calculateHealthScore(mockResult as any);
 
         return {
           success: true,
@@ -363,6 +558,7 @@ export const appRouter = router({
           isRoaming: hlrResponse.roaming === "true",
           isPorted: hlrResponse.ported === "true",
           reachable: hlrResponse.reachable,
+          healthScore,
         };
       }),
 
@@ -371,9 +567,16 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().optional(),
         phoneNumbers: z.array(z.string()).min(1).max(1000),
+        removeDuplicates: z.boolean().default(true),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { name, phoneNumbers } = input;
+        let { phoneNumbers } = input;
+        
+        // Remove duplicates if requested
+        if (input.removeDuplicates) {
+          const { unique } = detectDuplicates(phoneNumbers);
+          phoneNumbers = unique;
+        }
         
         // Check limits before starting
         const limitsCheck = await checkUserLimits(ctx.user.id, phoneNumbers.length);
@@ -384,7 +587,7 @@ export const appRouter = router({
         // Create batch record
         const batchId = await createHlrBatch({
           userId: ctx.user.id,
-          name: name || `Check ${new Date().toLocaleString()}`,
+          name: input.name || `Check ${new Date().toLocaleString()}`,
           totalNumbers: phoneNumbers.length,
           processedNumbers: 0,
           validNumbers: 0,
@@ -486,7 +689,7 @@ export const appRouter = router({
       return await getHlrBatchesByUserId(ctx.user.id);
     }),
 
-    // Get results for a specific batch (with pagination)
+    // Get results for a specific batch (with pagination and health scores)
     getResults: protectedProcedure
       .input(z.object({ 
         batchId: z.number(),
@@ -498,7 +701,19 @@ export const appRouter = router({
         if (!batch || batch.userId !== ctx.user.id) {
           return { results: [], total: 0, pages: 0 };
         }
-        return await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
+        const paginatedResults = await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
+        
+        // Add health scores to results
+        const resultsWithScores = paginatedResults.results.map(result => ({
+          ...result,
+          healthScore: calculateHealthScore(result),
+        }));
+        
+        return {
+          results: resultsWithScores,
+          total: paginatedResults.total,
+          pages: paginatedResults.pages,
+        };
       }),
 
     // Re-check numbers from a previous batch
@@ -600,6 +815,18 @@ export const appRouter = router({
         return { balance: 0, currency: "EUR", error: "Network error" };
       }
     }),
+
+    // Get cost estimate
+    getCostEstimate: protectedProcedure
+      .input(z.object({ count: z.number().min(1) }))
+      .query(({ input }) => {
+        return {
+          count: input.count,
+          costPerLookup: HLR_COST_PER_LOOKUP,
+          totalCost: input.count * HLR_COST_PER_LOOKUP,
+          currency: "EUR",
+        };
+      }),
   }),
 });
 

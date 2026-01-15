@@ -1,6 +1,6 @@
 import { eq, desc, sql, and, gte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -191,6 +191,7 @@ export async function deleteUser(id: number): Promise<void> {
     await db.delete(hlrResults).where(eq(hlrResults.batchId, batch.id));
   }
   await db.delete(hlrBatches).where(eq(hlrBatches.userId, id));
+  await db.delete(exportTemplates).where(eq(exportTemplates.userId, id));
   await db.delete(users).where(eq(users.id, id));
 }
 
@@ -485,6 +486,14 @@ export async function getHlrResultsByBatchIdPaginated(
   return { results, total, pages };
 }
 
+// Get all batches (for admin)
+export async function getAllBatches(): Promise<HlrBatch[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(hlrBatches).orderBy(desc(hlrBatches.createdAt));
+}
+
 // Get all batches with pagination (for admin)
 export async function getAllBatchesPaginated(
   page: number = 1,
@@ -507,4 +516,142 @@ export async function getAllBatchesPaginated(
   const pages = Math.ceil(total / pageSize);
   
   return { batches, total, pages };
+}
+
+// Export Templates operations
+export async function createExportTemplate(data: {
+  userId: number;
+  name: string;
+  fields: string[];
+  isDefault?: "yes" | "no";
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // If setting as default, unset other defaults for this user
+  if (data.isDefault === "yes") {
+    await db.update(exportTemplates)
+      .set({ isDefault: "no" })
+      .where(eq(exportTemplates.userId, data.userId));
+  }
+  
+  const result = await db.insert(exportTemplates).values({
+    userId: data.userId,
+    name: data.name,
+    fields: data.fields,
+    isDefault: data.isDefault || "no",
+  });
+  
+  return result[0].insertId;
+}
+
+export async function getExportTemplatesByUserId(userId: number): Promise<ExportTemplate[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(exportTemplates)
+    .where(eq(exportTemplates.userId, userId))
+    .orderBy(desc(exportTemplates.createdAt));
+}
+
+export async function getExportTemplateById(id: number): Promise<ExportTemplate | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(exportTemplates).where(eq(exportTemplates.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateExportTemplate(id: number, data: {
+  name?: string;
+  fields?: string[];
+  isDefault?: "yes" | "no";
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const template = await getExportTemplateById(id);
+  if (!template) throw new Error("Template not found");
+  
+  // If setting as default, unset other defaults for this user
+  if (data.isDefault === "yes") {
+    await db.update(exportTemplates)
+      .set({ isDefault: "no" })
+      .where(eq(exportTemplates.userId, template.userId));
+  }
+  
+  await db.update(exportTemplates).set(data).where(eq(exportTemplates.id, id));
+}
+
+export async function deleteExportTemplate(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(exportTemplates).where(eq(exportTemplates.id, id));
+}
+
+export async function getDefaultExportTemplate(userId: number): Promise<ExportTemplate | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(exportTemplates)
+    .where(and(
+      eq(exportTemplates.userId, userId),
+      eq(exportTemplates.isDefault, "yes")
+    ))
+    .limit(1);
+  
+  return result[0];
+}
+
+// Health Score calculation
+export function calculateHealthScore(result: HlrResult): number {
+  let score = 0;
+  
+  // Validity (40 points)
+  if (result.validNumber === "valid") {
+    score += 40;
+  } else if (result.validNumber === "unknown") {
+    score += 20;
+  }
+  
+  // Reachability (25 points)
+  if (result.reachable === "reachable") {
+    score += 25;
+  } else if (result.reachable === "unknown") {
+    score += 10;
+  }
+  
+  // Ported status (15 points) - not ported is better for deliverability
+  if (result.ported === "not_ported") {
+    score += 15;
+  } else if (result.ported?.includes("ported")) {
+    score += 10; // Ported but still valid
+  }
+  
+  // Roaming status (10 points) - not roaming is better
+  if (result.roaming === "not_roaming") {
+    score += 10;
+  } else if (result.roaming?.includes("roaming")) {
+    score += 5;
+  }
+  
+  // Network type (10 points) - mobile is best for SMS
+  if (result.currentNetworkType === "mobile") {
+    score += 10;
+  } else if (result.currentNetworkType === "fixed_line_or_mobile") {
+    score += 7;
+  } else if (result.currentNetworkType) {
+    score += 3;
+  }
+  
+  return Math.min(100, Math.max(0, score));
+}
+
+// Calculate health scores for batch results
+export function calculateBatchHealthScores(results: HlrResult[]): { result: HlrResult; healthScore: number }[] {
+  return results.map(result => ({
+    result,
+    healthScore: calculateHealthScore(result),
+  }));
 }

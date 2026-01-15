@@ -144,3 +144,21 @@ export const balanceAlerts = mysqlTable("balance_alerts", {
 
 export type BalanceAlert = typeof balanceAlerts.$inferSelect;
 export type InsertBalanceAlert = typeof balanceAlerts.$inferInsert;
+
+/**
+ * Export templates - customizable export field configurations per user
+ */
+export const exportTemplates = mysqlTable("export_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 128 }).notNull(),
+  /** JSON array of field names to include in export */
+  fields: json("fields").$type<string[]>().notNull(),
+  /** Is this the default template for the user */
+  isDefault: mysqlEnum("isDefault", ["yes", "no"]).default("no").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ExportTemplate = typeof exportTemplates.$inferSelect;
+export type InsertExportTemplate = typeof exportTemplates.$inferInsert;

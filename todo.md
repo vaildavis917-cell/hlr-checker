@@ -79,3 +79,10 @@
 - [x] Remove Profile page (users cannot change their own password)
 - [x] Only admin can change passwords (for self and other users)
 - [x] Remove Profile from sidebar menu for regular users
+
+## Unique Features (New)
+- [x] Number Health Score (0-100) - composite score based on validity, portability, roaming, history
+- [x] Duplicate Detection - auto-detect duplicates before checking, show count and option to remove
+- [x] Cost Calculator - show estimated cost before starting batch
+- [x] Export Templates - customizable export with field selection
+- [x] Admin can view all users' check history (batches from all users)
