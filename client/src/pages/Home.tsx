@@ -55,7 +55,7 @@ export default function Home() {
 
   // SEO: Set page title and meta description
   useEffect(() => {
-    document.title = "HLR Bulk Checker - Проверка номеров";
+    document.title = "HLR Checker - Проверка номеров";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Сервис HLR проверки телефонных номеров, информации об операторе, статуса роуминга и портирования.');
@@ -286,11 +286,8 @@ export default function Home() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">{t.home.title}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">HLR Checker</h1>
           <h2 className="sr-only">Сервис проверки телефонных номеров</h2>
-          <p className="text-muted-foreground">
-            {t.home.subtitle}
-          </p>
         </div>
 
         {/* Balance Card - Admin Only */}
