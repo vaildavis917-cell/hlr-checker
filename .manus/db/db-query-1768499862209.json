@@ -1,0 +1,19 @@
+{
+  "query": "SELECT id, name, totalNumbers, processedNumbers, validNumbers, invalidNumbers, status FROM hlr_batches WHERE status = 'processing';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT id, name, totalNumbers, processedNumbers, validNumbers, invalidNumbers, status FROM hlr_batches WHERE status = 'processing';",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "Check 1/15/2026, 4:33:55 PM",
+      "totalNumbers": "2725",
+      "processedNumbers": "2260",
+      "validNumbers": "2246",
+      "invalidNumbers": "14",
+      "status": "processing"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttotalNumbers\tprocessedNumbers\tvalidNumbers\tinvalidNumbers\tstatus\n30002\tCheck 1/15/2026, 4:33:55 PM\t2725\t2260\t2246\t14\tprocessing\n",
+  "stderr": "",
+  "execution_time_ms": 358
+}

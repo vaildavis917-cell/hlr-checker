@@ -1,0 +1,70 @@
+{
+  "query": "SELECT * FROM hlr_batches ORDER BY id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT * FROM hlr_batches ORDER BY id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "30002",
+      "userId": "101",
+      "name": "Check 1/15/2026, 4:33:55 PM",
+      "totalNumbers": "2725",
+      "processedNumbers": "2260",
+      "validNumbers": "2246",
+      "invalidNumbers": "14",
+      "status": "processing",
+      "createdAt": "2026-01-15 16:33:55",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "5",
+      "userId": "101",
+      "name": "Check 1/15/2026, 12:48:37 PM",
+      "totalNumbers": "422",
+      "processedNumbers": "422",
+      "validNumbers": "420",
+      "invalidNumbers": "2",
+      "status": "completed",
+      "createdAt": "2026-01-15 12:48:37",
+      "completedAt": "2026-01-15 12:52:26"
+    },
+    {
+      "id": "4",
+      "userId": "101",
+      "name": "Check 1/15/2026, 12:45:36 PM",
+      "totalNumbers": "4",
+      "processedNumbers": "4",
+      "validNumbers": "4",
+      "invalidNumbers": "0",
+      "status": "completed",
+      "createdAt": "2026-01-15 12:45:36",
+      "completedAt": "2026-01-15 12:45:39"
+    },
+    {
+      "id": "2",
+      "userId": "1",
+      "name": "1",
+      "totalNumbers": "1",
+      "processedNumbers": "1",
+      "validNumbers": "1",
+      "invalidNumbers": "0",
+      "status": "completed",
+      "createdAt": "2026-01-15 11:33:22",
+      "completedAt": "2026-01-15 11:33:23"
+    },
+    {
+      "id": "1",
+      "userId": "1",
+      "name": "Check 1/15/2026, 6:32:04 AM",
+      "totalNumbers": "1",
+      "processedNumbers": "1",
+      "validNumbers": "1",
+      "invalidNumbers": "0",
+      "status": "completed",
+      "createdAt": "2026-01-15 11:32:04",
+      "completedAt": "2026-01-15 11:32:07"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tname\ttotalNumbers\tprocessedNumbers\tvalidNumbers\tinvalidNumbers\tstatus\tcreatedAt\tcompletedAt\n30002\t101\tCheck 1/15/2026, 4:33:55 PM\t2725\t2260\t2246\t14\tprocessing\t2026-01-15 16:33:55\tNULL\n5\t101\tCheck 1/15/2026, 12:48:37 PM\t422\t422\t420\t2\tcompleted\t2026-01-15 12:48:37\t2026-01-15 12:52:26\n4\t101\tCheck 1/15/2026, 12:45:36 PM\t4\t4\t4\t0\tcompleted\t2026-01-15 12:45:36\t2026-01-15 12:45:39\n2\t1\t1\t1\t1\t1\t0\tcompleted\t2026-01-15 11:33:22\t2026-01-15 11:33:23\n1\t1\tCheck 1/15/2026, 6:32:04 AM\t1\t1\t1\t0\tcompleted\t2026-01-15 11:32:04\t2026-01-15 11:32:07\n",
+  "stderr": "",
+  "execution_time_ms": 362
+}

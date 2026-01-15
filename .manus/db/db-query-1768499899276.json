@@ -1,0 +1,26 @@
+{
+  "query": "SELECT batchId, COUNT(*) as cnt FROM hlr_results GROUP BY batchId ORDER BY batchId DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT batchId, COUNT(*) as cnt FROM hlr_results GROUP BY batchId ORDER BY batchId DESC;",
+  "rows": [
+    {
+      "batchId": "5",
+      "cnt": "422"
+    },
+    {
+      "batchId": "4",
+      "cnt": "4"
+    },
+    {
+      "batchId": "2",
+      "cnt": "1"
+    },
+    {
+      "batchId": "1",
+      "cnt": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "batchId\tcnt\n5\t422\n4\t4\n2\t1\n1\t1\n",
+  "stderr": "",
+  "execution_time_ms": 349
+}

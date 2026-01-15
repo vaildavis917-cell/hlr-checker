@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte } from "drizzle-orm";
+import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
@@ -171,6 +171,59 @@ export async function deleteHlrBatch(id: number): Promise<void> {
   
   await db.delete(hlrResults).where(eq(hlrResults.batchId, id));
   await db.delete(hlrBatches).where(eq(hlrBatches.id, id));
+}
+
+// Get cached result for a phone number (within last N hours)
+export async function getCachedResult(phoneNumber: string, hoursAgo: number = 24): Promise<HlrResult | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const cutoffDate = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+  
+  const results = await db.select()
+    .from(hlrResults)
+    .where(
+      and(
+        eq(hlrResults.phoneNumber, phoneNumber),
+        gte(hlrResults.createdAt, cutoffDate),
+        eq(hlrResults.status, "success")
+      )
+    )
+    .orderBy(desc(hlrResults.createdAt))
+    .limit(1);
+  
+  return results[0];
+}
+
+// Get cached results for multiple phone numbers
+export async function getCachedResults(phoneNumbers: string[], hoursAgo: number = 24): Promise<Map<string, HlrResult>> {
+  const db = await getDb();
+  if (!db) return new Map();
+  
+  if (phoneNumbers.length === 0) return new Map();
+  
+  const cutoffDate = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+  
+  const results = await db.select()
+    .from(hlrResults)
+    .where(
+      and(
+        inArray(hlrResults.phoneNumber, phoneNumbers),
+        gte(hlrResults.createdAt, cutoffDate),
+        eq(hlrResults.status, "success")
+      )
+    )
+    .orderBy(desc(hlrResults.createdAt));
+  
+  // Create map with most recent result for each phone
+  const cacheMap = new Map<string, HlrResult>();
+  for (const result of results) {
+    if (!cacheMap.has(result.phoneNumber)) {
+      cacheMap.set(result.phoneNumber, result);
+    }
+  }
+  
+  return cacheMap;
 }
 
 // User management operations
@@ -654,4 +707,29 @@ export function calculateBatchHealthScores(results: HlrResult[]): { result: HlrR
     result,
     healthScore: calculateHealthScore(result),
   }));
+}
+
+// Get phone numbers already checked in a batch (for resume functionality)
+export async function getCheckedPhoneNumbersInBatch(batchId: number): Promise<Set<string>> {
+  const db = await getDb();
+  if (!db) return new Set();
+  
+  const results = await db.select({ phoneNumber: hlrResults.phoneNumber })
+    .from(hlrResults)
+    .where(eq(hlrResults.batchId, batchId));
+  
+  return new Set(results.map(r => r.phoneNumber));
+}
+
+// Get incomplete batches for a user (for resume functionality)
+export async function getIncompleteBatches(userId: number): Promise<HlrBatch[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(hlrBatches)
+    .where(and(
+      eq(hlrBatches.userId, userId),
+      eq(hlrBatches.status, "processing")
+    ))
+    .orderBy(desc(hlrBatches.createdAt));
 }

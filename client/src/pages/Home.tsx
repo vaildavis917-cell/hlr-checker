@@ -86,6 +86,7 @@ export default function Home() {
   // API queries
   const balanceQuery = trpc.hlr.getBalance.useQuery(undefined, { enabled: isAdmin });
   const batchesQuery = trpc.hlr.listBatches.useQuery();
+  const incompleteBatchesQuery = trpc.hlr.getIncompleteBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
     currentBatchId !== null ? { batchId: currentBatchId, page: 1, pageSize: 1000 } : { batchId: -1, page: 1, pageSize: 1000 },
     { enabled: currentBatchId !== null && currentBatchId > 0 }
@@ -94,6 +95,7 @@ export default function Home() {
   // Extract results array from paginated response
   const resultsData = resultsQuery.data?.results || [];
   const startBatchMutation = trpc.hlr.startBatch.useMutation();
+  const resumeBatchMutation = trpc.hlr.resumeBatch.useMutation();
 
   // Parse phone numbers from input
   const parsePhoneNumbers = (input: string): string[] => {
@@ -210,6 +212,68 @@ export default function Home() {
     toast.success("Результаты успешно экспортированы");
   };
 
+  // Export results to XLSX (Excel)
+  const handleExportXLSX = async () => {
+    if (!resultsData || resultsData.length === 0) {
+      toast.error(t.home.noResultsToExport || "Нет результатов для экспорта");
+      return;
+    }
+
+    try {
+      // Dynamically import xlsx library
+      const XLSX = await import('xlsx');
+      
+      const headers = [
+        t.home.phoneNumber || "Номер телефона",
+        t.home.internationalFormat || "Международный формат",
+        t.home.validity || "Валидность",
+        t.home.reachability || "Достижимость",
+        t.home.country || "Страна",
+        t.home.countryCode || "Код страны",
+        t.home.currentOperator || "Текущий оператор",
+        t.home.networkType || "Тип сети",
+        t.home.originalOperator || "Оригинальный оператор",
+        t.home.ported || "Портирован",
+        t.home.roaming || "Роуминг",
+        t.home.status || "Статус",
+        t.home.healthScore || "Оценка качества"
+      ];
+
+      const rows = resultsData.map(r => ([
+        r.phoneNumber,
+        r.internationalFormat || "",
+        r.validNumber || "",
+        r.reachable || "",
+        r.countryName || "",
+        r.countryCode || "",
+        r.currentCarrierName || "",
+        r.currentNetworkType || "",
+        r.originalCarrierName || "",
+        r.ported || "",
+        r.roaming || "",
+        r.status,
+        r.healthScore ?? ""
+      ]));
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "HLR Results");
+      
+      // Auto-width columns
+      const colWidths = headers.map((h, i) => {
+        const maxLen = Math.max(h.length, ...rows.map(r => String(r[i] || "").length));
+        return { wch: Math.min(maxLen + 2, 40) };
+      });
+      ws['!cols'] = colWidths;
+
+      XLSX.writeFile(wb, `hlr-results-${currentBatchId}-${new Date().toISOString().split("T")[0]}.xlsx`);
+      toast.success(t.home.exportSuccess || "Результаты успешно экспортированы");
+    } catch (error) {
+      console.error("XLSX export error:", error);
+      toast.error(t.home.exportError || "Ошибка при экспорте в Excel");
+    }
+  };
+
   // Get unique values for filters
   const filterOptions = useMemo(() => {
     if (!resultsData || resultsData.length === 0) return { countries: [] as string[], operators: [] as string[] };
@@ -290,6 +354,45 @@ export default function Home() {
           <h1 className="text-3xl font-bold tracking-tight">HLR Checker</h1>
           <h2 className="sr-only">Сервис проверки телефонных номеров</h2>
         </div>
+
+        {/* Incomplete Batches Warning */}
+        {incompleteBatchesQuery.data && incompleteBatchesQuery.data.length > 0 && (
+          <div className="p-4 rounded-lg border border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-yellow-800 dark:text-yellow-200">
+                  {t.home.incompleteBatches || "У вас есть незавершенные проверки"}
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                  {t.home.incompleteBatchesDesc || "Некоторые проверки были прерваны. Результаты сохранены, но проверка не завершена."}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {incompleteBatchesQuery.data.map((batch) => (
+                    <div key={batch.id} className="flex items-center justify-between bg-white dark:bg-gray-800 p-2 rounded border">
+                      <div>
+                        <span className="font-medium">{batch.name}</span>
+                        <span className="text-sm text-muted-foreground ml-2">
+                          ({batch.processedNumbers || 0}/{batch.totalNumbers} {t.home.processed || "обработано"})
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setCurrentBatchId(batch.id);
+                          toast.info(t.home.viewingIncomplete || "Просмотр сохраненных результатов");
+                        }}
+                      >
+                        {t.view || "Просмотр"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Balance Card - Admin Only */}
         {isAdmin && (
@@ -564,6 +667,10 @@ export default function Home() {
                   <Button variant="outline" size="sm" onClick={handleExportCSV}>
                     <Download className="h-4 w-4 mr-2" />
                     {t.home.exportCSV}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleExportXLSX}>
+                    <Download className="h-4 w-4 mr-2" />
+                    {t.home.exportXLSX || "Excel"}
                   </Button>
                 </div>
               </div>

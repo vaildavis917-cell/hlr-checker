@@ -1,0 +1,8 @@
+{
+  "query": "SELECT b.id, b.name, b.total_numbers, b.processed_numbers, b.status, b.checked_at,\n       (SELECT COUNT(*) FROM hlr_results WHERE batch_id = b.id) as saved_results\nFROM hlr_batches b \nORDER BY b.id DESC \nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT b.id, b.name, b.total_numbers, b.processed_numbers, b.status, b.checked_at,\n       (SELECT COUNT(*) FROM hlr_results WHERE batch_id = b.id) as saved_results\nFROM hlr_batches b \nORDER BY b.id DESC \nLIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'b.total_numbers' in 'field list'"
+  ]
+}

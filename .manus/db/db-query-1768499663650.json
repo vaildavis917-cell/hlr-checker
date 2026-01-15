@@ -1,0 +1,50 @@
+{
+  "query": "SELECT b.id, b.name, b.totalNumbers, b.processedNumbers, b.status,\n       (SELECT COUNT(*) FROM hlr_results WHERE hlr_results.batchId = b.id) as saved_results\nFROM hlr_batches b \nORDER BY b.id DESC \nLIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT b.id, b.name, b.totalNumbers, b.processedNumbers, b.status,\n       (SELECT COUNT(*) FROM hlr_results WHERE hlr_results.batchId = b.id) as saved_results\nFROM hlr_batches b \nORDER BY b.id DESC \nLIMIT 10;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "Check 1/15/2026, 4:33:55 PM",
+      "totalNumbers": "2725",
+      "processedNumbers": "2260",
+      "status": "processing",
+      "saved_results": "0"
+    },
+    {
+      "id": "5",
+      "name": "Check 1/15/2026, 12:48:37 PM",
+      "totalNumbers": "422",
+      "processedNumbers": "422",
+      "status": "completed",
+      "saved_results": "422"
+    },
+    {
+      "id": "4",
+      "name": "Check 1/15/2026, 12:45:36 PM",
+      "totalNumbers": "4",
+      "processedNumbers": "4",
+      "status": "completed",
+      "saved_results": "4"
+    },
+    {
+      "id": "2",
+      "name": "1",
+      "totalNumbers": "1",
+      "processedNumbers": "1",
+      "status": "completed",
+      "saved_results": "1"
+    },
+    {
+      "id": "1",
+      "name": "Check 1/15/2026, 6:32:04 AM",
+      "totalNumbers": "1",
+      "processedNumbers": "1",
+      "status": "completed",
+      "saved_results": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttotalNumbers\tprocessedNumbers\tstatus\tsaved_results\n30002\tCheck 1/15/2026, 4:33:55 PM\t2725\t2260\tprocessing\t0\n5\tCheck 1/15/2026, 12:48:37 PM\t422\t422\tcompleted\t422\n4\tCheck 1/15/2026, 12:45:36 PM\t4\t4\tcompleted\t4\n2\t1\t1\t1\tcompleted\t1\n1\tCheck 1/15/2026, 6:32:04 AM\t1\t1\tcompleted\t1\n",
+  "stderr": "",
+  "execution_time_ms": 357
+}

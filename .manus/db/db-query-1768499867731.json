@@ -1,0 +1,16 @@
+{
+  "query": "SELECT b.id, b.totalNumbers, b.processedNumbers, \n       (SELECT COUNT(*) FROM hlr_results WHERE hlr_results.batchId = b.id) as actual_saved\nFROM hlr_batches b WHERE b.status = 'processing';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT b.id, b.totalNumbers, b.processedNumbers, \n       (SELECT COUNT(*) FROM hlr_results WHERE hlr_results.batchId = b.id) as actual_saved\nFROM hlr_batches b WHERE b.status = 'processing';",
+  "rows": [
+    {
+      "id": "30002",
+      "totalNumbers": "2725",
+      "processedNumbers": "2260",
+      "actual_saved": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttotalNumbers\tprocessedNumbers\tactual_saved\n30002\t2725\t2260\t0\n",
+  "stderr": "",
+  "execution_time_ms": 402
+}

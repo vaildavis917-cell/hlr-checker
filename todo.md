@@ -105,3 +105,19 @@
 ## Bug Fixes
 - [x] Show Reachable status in results table
 - [x] Make results dialog wider to fit all columns
+- [ ] BUG: Large batch (2700+ numbers) stops processing - timeout issue
+- [x] CRITICAL: Save results immediately after each number check (not at the end)
+- [x] Add resume functionality for interrupted batches
+
+## Number Normalization & Validation
+- [x] Normalize phone numbers to E.164 format before API call
+- [x] Validate format (7-15 digits, no letters)
+- [x] Filter out invalid numbers before sending to API
+
+## Caching & Optimization
+- [x] Cache results for 24-48 hours - reuse without API call
+- [x] Warn about duplicates in history ("This number was checked 2 hours ago")
+- [x] Warn if batch has many invalid numbers
+
+## Export
+- [x] Export to Excel (XLSX) format

@@ -8,6 +8,7 @@ import {
   updateHlrBatch,
   getHlrBatchById,
   getHlrBatchesByUserId,
+  createHlrResult,
   createHlrResults,
   getHlrResultsByBatchId,
   deleteHlrBatch,
@@ -38,10 +39,15 @@ import {
   calculateHealthScore,
   calculateBatchHealthScores,
   getAllBatches,
+  getCachedResults,
+  getCheckedPhoneNumbersInBatch,
+  getIncompleteBatches,
 } from "./db";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
 import { InsertHlrResult } from "../drizzle/schema";
+import { analyzeBatch, normalizePhoneNumber } from "./phoneUtils";
+import * as XLSX from "xlsx";
 
 // Seven.io HLR API response type
 interface SevenIoHlrResponse {
@@ -562,24 +568,59 @@ export const appRouter = router({
         };
       }),
 
+    // Analyze batch before checking (normalization, validation, duplicates)
+    analyzeBatchNumbers: protectedProcedure
+      .input(z.object({
+        phoneNumbers: z.array(z.string()).min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const analysis = analyzeBatch(input.phoneNumbers);
+        return analysis;
+      }),
+
     // Start a new HLR batch check
     startBatch: protectedProcedure
       .input(z.object({
         name: z.string().optional(),
         phoneNumbers: z.array(z.string()).min(1),
         removeDuplicates: z.boolean().default(true),
+        skipInvalid: z.boolean().default(true), // Skip invalid format numbers
       }))
       .mutation(async ({ ctx, input }) => {
         let { phoneNumbers } = input;
         
-        // Remove duplicates if requested
-        if (input.removeDuplicates) {
-          const { unique } = detectDuplicates(phoneNumbers);
-          phoneNumbers = unique;
+        // Analyze and normalize numbers
+        const analysis = analyzeBatch(phoneNumbers);
+        
+        // Get only valid normalized numbers if skipInvalid is true
+        let numbersToCheck: string[];
+        let skippedInvalid = 0;
+        let skippedDuplicates = 0;
+        
+        if (input.skipInvalid) {
+          numbersToCheck = analysis.valid.map(n => n.normalized);
+          skippedInvalid = analysis.totalInvalid;
+          skippedDuplicates = analysis.totalDuplicates;
+        } else {
+          // Still normalize but include all
+          numbersToCheck = phoneNumbers.map(p => normalizePhoneNumber(p).normalized).filter(Boolean);
+          if (input.removeDuplicates) {
+            const { unique } = detectDuplicates(numbersToCheck);
+            numbersToCheck = unique;
+          }
         }
         
-        // Check limits before starting
-        const limitsCheck = await checkUserLimits(ctx.user.id, phoneNumbers.length);
+        if (numbersToCheck.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No valid numbers to check" });
+        }
+        
+        // Check cache for recently checked numbers (24 hours)
+        const cachedResults = await getCachedResults(numbersToCheck, 24);
+        const numbersToActuallyCheck = numbersToCheck.filter(n => !cachedResults.has(n));
+        const cachedCount = numbersToCheck.length - numbersToActuallyCheck.length;
+        
+        // Check limits only for numbers that need API calls
+        const limitsCheck = await checkUserLimits(ctx.user.id, numbersToActuallyCheck.length);
         if (!limitsCheck.allowed) {
           throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
         }
@@ -588,38 +629,88 @@ export const appRouter = router({
         const batchId = await createHlrBatch({
           userId: ctx.user.id,
           name: input.name || `Check ${new Date().toLocaleString()}`,
-          totalNumbers: phoneNumbers.length,
+          totalNumbers: numbersToCheck.length,
           processedNumbers: 0,
           validNumbers: 0,
           invalidNumbers: 0,
           status: "processing",
         });
 
-        // Process numbers in background (we'll return immediately and update progress)
-        const results: InsertHlrResult[] = [];
+        // Process numbers - save each result IMMEDIATELY to prevent data loss
         let validCount = 0;
         let invalidCount = 0;
+        let processedCount = 0;
+        let cachedUsed = 0;
+        
+        // First, save cached results
+        const cachedEntries = Array.from(cachedResults.entries());
+        for (const [phone, cachedResult] of cachedEntries) {
+          const healthScore = calculateHealthScore(cachedResult);
+          
+          await createHlrResult({
+            batchId,
+            phoneNumber: phone,
+            internationalFormat: cachedResult.internationalFormat,
+            nationalFormat: cachedResult.nationalFormat,
+            countryCode: cachedResult.countryCode,
+            countryName: cachedResult.countryName,
+            countryPrefix: cachedResult.countryPrefix,
+            currentCarrierName: cachedResult.currentCarrierName,
+            currentCarrierCode: cachedResult.currentCarrierCode,
+            currentCarrierCountry: cachedResult.currentCarrierCountry,
+            currentNetworkType: cachedResult.currentNetworkType,
+            originalCarrierName: cachedResult.originalCarrierName,
+            originalCarrierCode: cachedResult.originalCarrierCode,
+            validNumber: cachedResult.validNumber,
+            reachable: cachedResult.reachable,
+            ported: cachedResult.ported,
+            roaming: cachedResult.roaming,
+            gsmCode: cachedResult.gsmCode,
+            gsmMessage: cachedResult.gsmMessage,
+            status: "success",
+            rawResponse: { cached: true, originalId: cachedResult.id },
+          });
+          
+          processedCount++;
+          cachedUsed++;
+          if (cachedResult.validNumber === "valid") validCount++;
+          else invalidCount++;
+          
+          // Update batch progress
+          if (processedCount % 50 === 0) {
+            await updateHlrBatch(batchId, {
+              processedNumbers: processedCount,
+              validNumbers: validCount,
+              invalidNumbers: invalidCount,
+            });
+          }
+        }
 
-        for (let i = 0; i < phoneNumbers.length; i++) {
-          const phone = phoneNumbers[i].trim();
+        // Then check remaining numbers via API
+        for (let i = 0; i < numbersToActuallyCheck.length; i++) {
+          const phone = numbersToActuallyCheck[i];
           if (!phone) continue;
 
           const hlrResponse = await performHlrLookup(phone);
+          processedCount++;
+
+          // Prepare result object
+          let resultData: InsertHlrResult;
 
           if ("error" in hlrResponse) {
-            results.push({
+            resultData = {
               batchId,
               phoneNumber: phone,
               status: "error",
               errorMessage: hlrResponse.error,
-            });
+            };
             invalidCount++;
           } else {
             const isValid = hlrResponse.valid_number === "valid";
             if (isValid) validCount++;
             else invalidCount++;
 
-            results.push({
+            resultData = {
               batchId,
               phoneNumber: phone,
               internationalFormat: hlrResponse.international_format_number,
@@ -641,36 +732,44 @@ export const appRouter = router({
               gsmMessage: hlrResponse.gsm_message,
               status: "success",
               rawResponse: hlrResponse as unknown as Record<string, unknown>,
-            });
+            };
           }
 
+          // CRITICAL: Save result IMMEDIATELY after each check
+          await createHlrResult(resultData);
+
           // Update progress every 10 numbers or at the end
-          if ((i + 1) % 10 === 0 || i === phoneNumbers.length - 1) {
+          if (processedCount % 10 === 0 || i === phoneNumbers.length - 1) {
             await updateHlrBatch(batchId, {
-              processedNumbers: i + 1,
+              processedNumbers: processedCount,
               validNumbers: validCount,
               invalidNumbers: invalidCount,
             });
           }
         }
 
-        // Save all results
-        await createHlrResults(results);
-
         // Mark batch as completed
         await updateHlrBatch(batchId, {
           status: "completed",
-          processedNumbers: phoneNumbers.length,
+          processedNumbers: numbersToCheck.length,
           validNumbers: validCount,
           invalidNumbers: invalidCount,
           completedAt: new Date(),
         });
         
-        // Increment user checks and log action
-        await incrementUserChecks(ctx.user.id, phoneNumbers.length);
-        await logAction({ userId: ctx.user.id, action: "batch_check", details: `Checked ${phoneNumbers.length} numbers` });
+        // Increment user checks and log action (only count API calls, not cached)
+        await incrementUserChecks(ctx.user.id, numbersToActuallyCheck.length);
+        await logAction({ userId: ctx.user.id, action: "batch_check", details: `Checked ${numbersToCheck.length} numbers (${cachedUsed} from cache, ${skippedInvalid} invalid skipped, ${skippedDuplicates} duplicates skipped)` });
 
-        return { batchId, totalProcessed: phoneNumbers.length };
+        return { 
+          batchId, 
+          totalProcessed: numbersToCheck.length,
+          fromCache: cachedUsed,
+          apiCalls: numbersToActuallyCheck.length,
+          skippedInvalid,
+          skippedDuplicates,
+          estimatedSavings: (skippedInvalid + skippedDuplicates + cachedUsed) * 0.01,
+        };
       }),
 
     // Get batch status and progress
@@ -716,6 +815,57 @@ export const appRouter = router({
         };
       }),
 
+    // Export results to XLSX format
+    exportXlsx: protectedProcedure
+      .input(z.object({ 
+        batchId: z.number(),
+        fields: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const batch = await getHlrBatchById(input.batchId);
+        if (!batch || batch.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+        }
+        
+        const results = await getHlrResultsByBatchId(input.batchId);
+        
+        // Prepare data for Excel
+        const data = results.map(r => {
+          const healthScore = calculateHealthScore(r);
+          return {
+            "Номер": r.phoneNumber,
+            "Международный формат": r.internationalFormat || "",
+            "Страна": r.countryName || "",
+            "Код страны": r.countryCode || "",
+            "Оператор": r.currentCarrierName || "",
+            "Тип сети": r.currentNetworkType || "",
+            "Оригинальный оператор": r.originalCarrierName || "",
+            "Валидность": r.validNumber || "",
+            "Достижимость": r.reachable || "",
+            "Портирован": r.ported || "",
+            "Роуминг": r.roaming || "",
+            "Health Score": healthScore,
+            "GSM код": r.gsmCode || "",
+            "GSM сообщение": r.gsmMessage || "",
+            "Дата проверки": r.createdAt ? new Date(r.createdAt).toLocaleString() : "",
+          };
+        });
+        
+        // Create workbook and worksheet
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "HLR Results");
+        
+        // Generate buffer
+        const buffer = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+        
+        return {
+          filename: `hlr-results-${batch.id}-${new Date().toISOString().split('T')[0]}.xlsx`,
+          data: buffer,
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        };
+      }),
+
     // Re-check numbers from a previous batch
     recheckBatch: protectedProcedure
       .input(z.object({ batchId: z.number() }))
@@ -753,6 +903,140 @@ export const appRouter = router({
         await logAction({ userId: ctx.user.id, action: "recheck_batch", details: `Rechecking batch ${input.batchId}` });
         
         return { newBatchId, phoneNumbers };
+      }),
+
+    // Get incomplete batches for resume functionality
+    getIncompleteBatches: protectedProcedure.query(async ({ ctx }) => {
+      return await getIncompleteBatches(ctx.user.id);
+    }),
+
+    // Resume an interrupted batch
+    resumeBatch: protectedProcedure
+      .input(z.object({ 
+        batchId: z.number(),
+        phoneNumbers: z.array(z.string()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const batch = await getHlrBatchById(input.batchId);
+        if (!batch || batch.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+        }
+        
+        if (batch.status !== "processing") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Batch is not in processing state" });
+        }
+        
+        // Get already checked phone numbers
+        const checkedNumbers = await getCheckedPhoneNumbersInBatch(input.batchId);
+        
+        // Filter out already checked numbers
+        const numbersToCheck = input.phoneNumbers.filter(n => !checkedNumbers.has(n));
+        
+        if (numbersToCheck.length === 0) {
+          // All numbers already checked, mark as completed
+          await updateHlrBatch(input.batchId, {
+            status: "completed",
+            completedAt: new Date(),
+          });
+          return { 
+            batchId: input.batchId, 
+            resumed: false, 
+            message: "All numbers already checked",
+            alreadyChecked: checkedNumbers.size,
+            remaining: 0,
+          };
+        }
+        
+        // Check limits for remaining numbers
+        const limitsCheck = await checkUserLimits(ctx.user.id, numbersToCheck.length);
+        if (!limitsCheck.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
+        }
+        
+        // Process remaining numbers
+        let validCount = batch.validNumbers || 0;
+        let invalidCount = batch.invalidNumbers || 0;
+        let processedCount = batch.processedNumbers || 0;
+        
+        for (let i = 0; i < numbersToCheck.length; i++) {
+          const phone = numbersToCheck[i];
+          if (!phone) continue;
+
+          const hlrResponse = await performHlrLookup(phone);
+          processedCount++;
+
+          let resultData: InsertHlrResult;
+
+          if ("error" in hlrResponse) {
+            resultData = {
+              batchId: input.batchId,
+              phoneNumber: phone,
+              status: "error",
+              errorMessage: hlrResponse.error,
+            };
+            invalidCount++;
+          } else {
+            const isValid = hlrResponse.valid_number === "valid";
+            if (isValid) validCount++;
+            else invalidCount++;
+
+            resultData = {
+              batchId: input.batchId,
+              phoneNumber: phone,
+              internationalFormat: hlrResponse.international_format_number,
+              nationalFormat: hlrResponse.national_format_number,
+              countryCode: hlrResponse.country_code,
+              countryName: hlrResponse.country_name,
+              countryPrefix: hlrResponse.country_prefix,
+              currentCarrierName: hlrResponse.current_carrier?.name,
+              currentCarrierCode: hlrResponse.current_carrier?.network_code,
+              currentCarrierCountry: hlrResponse.current_carrier?.country,
+              currentNetworkType: hlrResponse.current_carrier?.network_type,
+              originalCarrierName: hlrResponse.original_carrier?.name,
+              originalCarrierCode: hlrResponse.original_carrier?.network_code,
+              validNumber: hlrResponse.valid_number,
+              reachable: hlrResponse.reachable,
+              ported: hlrResponse.ported,
+              roaming: hlrResponse.roaming,
+              gsmCode: hlrResponse.gsm_code,
+              gsmMessage: hlrResponse.gsm_message,
+              status: "success",
+              rawResponse: hlrResponse as unknown as Record<string, unknown>,
+            };
+          }
+
+          // Save result immediately
+          await createHlrResult(resultData);
+
+          // Update progress every 10 numbers
+          if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
+            await updateHlrBatch(input.batchId, {
+              processedNumbers: processedCount,
+              validNumbers: validCount,
+              invalidNumbers: invalidCount,
+            });
+          }
+        }
+
+        // Mark batch as completed
+        await updateHlrBatch(input.batchId, {
+          status: "completed",
+          processedNumbers: processedCount,
+          validNumbers: validCount,
+          invalidNumbers: invalidCount,
+          completedAt: new Date(),
+        });
+        
+        await incrementUserChecks(ctx.user.id, numbersToCheck.length);
+        await logAction({ userId: ctx.user.id, action: "resume_batch", details: `Resumed batch ${input.batchId}, checked ${numbersToCheck.length} remaining numbers` });
+
+        return { 
+          batchId: input.batchId, 
+          resumed: true,
+          alreadyChecked: checkedNumbers.size,
+          newlyChecked: numbersToCheck.length,
+          totalProcessed: processedCount,
+        };
       }),
 
     // Delete a batch and its results
