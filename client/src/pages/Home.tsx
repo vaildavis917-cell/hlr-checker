@@ -649,6 +649,7 @@ export default function Home() {
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
+                        <TableHead>{t.home.reachable}</TableHead>
                         <TableHead 
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => toggleSort("currentCarrierName")}
@@ -699,7 +700,7 @@ export default function Home() {
                     <TableBody>
                       {filteredResults.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                             {t.home.noResultsMatch}
                           </TableCell>
                         </TableRow>
@@ -710,6 +711,11 @@ export default function Home() {
                               {result.internationalFormat || result.phoneNumber}
                             </TableCell>
                             <TableCell>{getStatusBadge(result.validNumber)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {result.reachable ? (t.reachableStatus as any)[result.reachable] || result.reachable : "-"}
+                              </Badge>
+                            </TableCell>
                             <TableCell>
                               <div>
                                 <p className="font-medium">{result.currentCarrierName || "-"}</p>

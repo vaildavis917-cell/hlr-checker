@@ -383,7 +383,7 @@ export default function AdminHistory() {
 
         {/* Results Dialog */}
         <Dialog open={isResultsDialogOpen} onOpenChange={setIsResultsDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
                 <span>{t.adminHistory.batchResults}</span>
@@ -409,6 +409,7 @@ export default function AdminHistory() {
                     <TableRow>
                       <TableHead>{t.home.phoneNumber}</TableHead>
                       <TableHead>{t.status}</TableHead>
+                      <TableHead>{t.home.reachable}</TableHead>
                       <TableHead>{t.home.health}</TableHead>
                       <TableHead>{t.home.country}</TableHead>
                       <TableHead>{t.home.operator}</TableHead>
@@ -423,6 +424,11 @@ export default function AdminHistory() {
                           {result.internationalFormat || result.phoneNumber}
                         </TableCell>
                         <TableCell>{getStatusBadge(result.validNumber)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {result.reachable ? (t.reachableStatus as any)[result.reachable] || result.reachable : "-"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <HealthScoreBadge score={result.healthScore || 0} size="sm" />
                         </TableCell>

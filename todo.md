@@ -100,3 +100,8 @@
 
 ## Documentation
 - [x] Create user guide with status explanations and usage instructions
+- [ ] Add Help/Manual page inside the application with usage guide
+
+## Bug Fixes
+- [x] Show Reachable status in results table
+- [x] Make results dialog wider to fit all columns

@@ -101,6 +101,7 @@ const translations = {
       roaming: "Роуминг",
       ported: "Портирован",
       health: "Качество",
+      reachable: "Достижимость",
       statusValid: "Валидный",
       statusInvalid: "Невалидный",
       statusUnknown: "Неизвестно",
@@ -320,6 +321,15 @@ const translations = {
       assumed_ported: "Предположительно портирован",
       unknown: "Неизвестно",
     },
+    
+    reachableStatus: {
+      reachable: "Доступен",
+      undelivered: "Недоставлен",
+      absent: "Недоступен",
+      bad_number: "Неверный номер",
+      blacklisted: "В чёрном списке",
+      unknown: "Неизвестно",
+    },
   },
   
   uk: {
@@ -407,6 +417,7 @@ const translations = {
       roaming: "Роумінг",
       ported: "Портований",
       health: "Якість",
+      reachable: "Досяжність",
       statusValid: "Валідний",
       statusInvalid: "Невалідний",
       statusUnknown: "Невідомо",
@@ -626,6 +637,15 @@ const translations = {
       assumed_ported: "Ймовірно портований",
       unknown: "Невідомо",
     },
+    
+    reachableStatus: {
+      reachable: "Доступний",
+      undelivered: "Недоставлений",
+      absent: "Недоступний",
+      bad_number: "Невірний номер",
+      blacklisted: "У чорному списку",
+      unknown: "Невідомо",
+    },
   },
   
   en: {
@@ -713,6 +733,7 @@ const translations = {
       roaming: "Roaming",
       ported: "Ported",
       health: "Health",
+      reachable: "Reachable",
       statusValid: "Valid",
       statusInvalid: "Invalid",
       statusUnknown: "Unknown",
@@ -930,6 +951,15 @@ const translations = {
       ported: "Ported",
       assumed_not_ported: "Assumed not ported",
       assumed_ported: "Assumed ported",
+      unknown: "Unknown",
+    },
+    
+    reachableStatus: {
+      reachable: "Reachable",
+      undelivered: "Undelivered",
+      absent: "Absent",
+      bad_number: "Bad number",
+      blacklisted: "Blacklisted",
       unknown: "Unknown",
     },
   },
