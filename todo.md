@@ -36,3 +36,17 @@
 
 ## Bugs
 - [x] Fix: getResults query called with null batchId causing validation error
+
+## Custom Auth System
+- [x] Add username and password_hash fields to users table
+- [x] Create login endpoint with password verification
+- [x] Create admin endpoint to create users with login/password
+- [x] Build login page UI
+- [x] Update admin panel to create users with credentials
+- [x] Remove Manus OAuth dependency from auth flow
+
+## SEO Fixes
+- [x] Add H1 and H2 headings to home page
+- [x] Set proper page title (30-60 characters)
+- [x] Add meta description (50-160 characters)
+- [x] Add keywords meta tag

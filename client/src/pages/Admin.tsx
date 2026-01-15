@@ -39,33 +39,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-
-type User = {
-  id: number;
-  openId: string;
-  name: string | null;
-  email: string | null;
-  loginMethod: string | null;
-  role: "user" | "admin";
-  createdAt: Date;
-  updatedAt: Date;
-  lastSignedIn: Date;
-};
-
-type InviteCode = {
-  id: number;
-  code: string;
-  email: string | null;
-  createdBy: number;
-  usedBy: number | null;
-  usedAt: Date | null;
-  expiresAt: Date | null;
-  isActive: "yes" | "no";
-  createdAt: Date;
-};
 import { useState } from "react";
 import { 
   Users, 
@@ -73,22 +48,40 @@ import {
   Trash2, 
   Shield,
   ShieldCheck,
-  Copy,
-  Check,
   Loader2,
-  Mail,
-  Key,
-  Clock
+  Eye,
+  EyeOff,
+  UserX,
+  UserCheck
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
+type User = {
+  id: number;
+  username: string;
+  passwordHash: string;
+  name: string | null;
+  email: string | null;
+  role: "user" | "admin";
+  isActive: "yes" | "no";
+  createdAt: Date;
+  updatedAt: Date;
+  lastSignedIn: Date;
+};
+
 export default function Admin() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // New user form state
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState<"user" | "admin">("user");
 
   // Check if user is admin
   if (user && user.role !== "admin") {
@@ -119,26 +112,42 @@ export default function Admin() {
 
   // API queries
   const usersQuery = trpc.admin.listUsers.useQuery();
-  const invitesQuery = trpc.admin.listInvites.useQuery();
-  const createInviteMutation = trpc.admin.createInvite.useMutation();
+  const createUserMutation = trpc.admin.createUser.useMutation();
   const deleteUserMutation = trpc.admin.deleteUser.useMutation();
   const updateRoleMutation = trpc.admin.updateUserRole.useMutation();
-  const deleteInviteMutation = trpc.admin.deleteInvite.useMutation();
+  const toggleActiveMutation = trpc.admin.toggleUserActive.useMutation();
 
-  const handleCreateInvite = async () => {
+  const handleCreateUser = async () => {
+    if (!newUsername || !newPassword) {
+      toast.error("Username and password are required");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
     try {
-      const result = await createInviteMutation.mutateAsync({
-        email: inviteEmail || undefined,
+      await createUserMutation.mutateAsync({
+        username: newUsername,
+        password: newPassword,
+        name: newName || undefined,
+        email: newEmail || undefined,
+        role: newRole,
       });
-      invitesQuery.refetch();
-      setInviteEmail("");
+      usersQuery.refetch();
+      
+      // Reset form
+      setNewUsername("");
+      setNewPassword("");
+      setNewName("");
+      setNewEmail("");
+      setNewRole("user");
       setIsCreateDialogOpen(false);
       
-      // Copy to clipboard
-      await navigator.clipboard.writeText(result.code);
-      toast.success("Invite code created and copied to clipboard!");
-    } catch (error) {
-      toast.error("Failed to create invite code");
+      toast.success("User created successfully!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create user");
     }
   };
 
@@ -162,21 +171,14 @@ export default function Admin() {
     }
   };
 
-  const handleDeleteInvite = async (inviteId: number) => {
+  const handleToggleActive = async (userId: number, isActive: "yes" | "no") => {
     try {
-      await deleteInviteMutation.mutateAsync({ inviteId });
-      invitesQuery.refetch();
-      toast.success("Invite code deleted");
+      await toggleActiveMutation.mutateAsync({ userId, isActive });
+      usersQuery.refetch();
+      toast.success(isActive === "yes" ? "User activated" : "User deactivated");
     } catch (error) {
-      toast.error("Failed to delete invite code");
+      toast.error("Failed to update user status");
     }
-  };
-
-  const copyToClipboard = async (code: string) => {
-    await navigator.clipboard.writeText(code);
-    setCopiedCode(code);
-    toast.success("Code copied to clipboard");
-    setTimeout(() => setCopiedCode(null), 2000);
   };
 
   return (
@@ -189,91 +191,198 @@ export default function Admin() {
             Admin Panel
           </h1>
           <p className="text-muted-foreground">
-            Manage users and invite codes for the HLR Checker
+            Manage users for the HLR Checker
           </p>
         </div>
 
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="users" className="gap-2">
-              <Users className="h-4 w-4" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="invites" className="gap-2">
-              <Key className="h-4 w-4" />
-              Invite Codes
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Users Tab */}
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>All Users</CardTitle>
-                <CardDescription>
-                  {usersQuery.data?.length || 0} registered users
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {usersQuery.isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        {/* Users Card */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                All Users
+              </CardTitle>
+              <CardDescription>
+                {usersQuery.data?.length || 0} registered users
+              </CardDescription>
+            </div>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Create User
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New User</DialogTitle>
+                  <DialogDescription>
+                    Create a new user account with login credentials
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username *</Label>
+                    <Input
+                      id="username"
+                      placeholder="Enter username"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                    />
                   </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>User</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Role</TableHead>
-                          <TableHead>Last Sign In</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {usersQuery.data?.map((u: User) => (
-                          <TableRow key={u.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <span className="text-sm font-medium text-primary">
-                                    {u.name?.charAt(0).toUpperCase() || "?"}
-                                  </span>
-                                </div>
-                                <span className="font-medium">{u.name || "Unknown"}</span>
-                                {u.id === user?.id && (
-                                  <Badge variant="outline" className="text-xs">You</Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {u.email || "-"}
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={u.role}
-                                onValueChange={(value: "user" | "admin") => handleUpdateRole(u.id, value)}
-                                disabled={u.id === user?.id}
-                              >
-                                <SelectTrigger className="w-[100px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="user">User</SelectItem>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {new Date(u.lastSignedIn).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {new Date(u.createdAt).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {u.id !== user?.id && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password *</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter password (min 6 characters)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Display Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="Enter display name (optional)"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter email (optional)"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Select value={newRole} onValueChange={(v: "user" | "admin") => setNewRole(v)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleCreateUser}
+                    disabled={createUserMutation.isPending}
+                  >
+                    {createUserMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <UserPlus className="h-4 w-4 mr-2" />
+                    )}
+                    Create User
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            {usersQuery.isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last Sign In</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {usersQuery.data?.map((u: User) => (
+                      <TableRow key={u.id} className={u.isActive === "no" ? "opacity-50" : ""}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <span className="text-sm font-medium text-primary">
+                                {(u.name || u.username).charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="font-medium">{u.name || u.username}</span>
+                            {u.id === user?.id && (
+                              <Badge variant="outline" className="text-xs">You</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {u.username}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {u.email || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={u.role}
+                            onValueChange={(value: "user" | "admin") => handleUpdateRole(u.id, value)}
+                            disabled={u.id === user?.id}
+                          >
+                            <SelectTrigger className="w-[100px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={u.isActive === "yes" ? "default" : "secondary"}>
+                            {u.isActive === "yes" ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(u.lastSignedIn).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {u.id !== user?.id && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleToggleActive(u.id, u.isActive === "yes" ? "no" : "yes")}
+                                  title={u.isActive === "yes" ? "Deactivate user" : "Activate user"}
+                                >
+                                  {u.isActive === "yes" ? (
+                                    <UserX className="h-4 w-4 text-orange-500" />
+                                  ) : (
+                                    <UserCheck className="h-4 w-4 text-green-500" />
+                                  )}
+                                </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
@@ -284,7 +393,7 @@ export default function Admin() {
                                     <AlertDialogHeader>
                                       <AlertDialogTitle>Delete User</AlertDialogTitle>
                                       <AlertDialogDescription>
-                                        Are you sure you want to delete {u.name || "this user"}? 
+                                        Are you sure you want to delete {u.name || u.username}? 
                                         This will also delete all their HLR check history.
                                       </AlertDialogDescription>
                                     </AlertDialogHeader>
@@ -299,177 +408,25 @@ export default function Admin() {
                                     </AlertDialogFooter>
                                   </AlertDialogContent>
                                 </AlertDialog>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Invites Tab */}
-          <TabsContent value="invites">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Invite Codes</CardTitle>
-                  <CardDescription>
-                    Create invite codes to allow new users to register
-                  </CardDescription>
-                </div>
-                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Create Invite
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create Invite Code</DialogTitle>
-                      <DialogDescription>
-                        Generate a new invite code. Optionally specify an email to restrict who can use it.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email (optional)</Label>
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="email"
-                            type="email"
-                            placeholder="user@example.com"
-                            value={inviteEmail}
-                            onChange={(e) => setInviteEmail(e.target.value)}
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Leave empty to create a code usable by anyone
-                        </p>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleCreateInvite} disabled={createInviteMutation.isPending}>
-                        {createInviteMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : (
-                          <Key className="h-4 w-4 mr-2" />
-                        )}
-                        Generate Code
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                {invitesQuery.isLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : invitesQuery.data?.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Key className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                    <p className="text-lg font-medium">No invite codes yet</p>
-                    <p className="text-sm mt-1">Create an invite code to allow new users to register</p>
-                  </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Code</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead>Used</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {invitesQuery.data?.map((invite: InviteCode) => (
-                          <TableRow key={invite.id}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
-                                  {invite.code}
-                                </code>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => copyToClipboard(invite.code)}
-                                  disabled={invite.isActive === "no"}
-                                >
-                                  {copiedCode === invite.code ? (
-                                    <Check className="h-4 w-4 text-success" />
-                                  ) : (
-                                    <Copy className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {invite.email || "Any"}
-                            </TableCell>
-                            <TableCell>
-                              {invite.isActive === "yes" ? (
-                                <Badge className="bg-success text-success-foreground">Active</Badge>
-                              ) : (
-                                <Badge variant="secondary">Used</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {new Date(invite.createdAt).toLocaleDateString()}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {invite.usedAt ? new Date(invite.usedAt).toLocaleDateString() : "-"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Invite Code</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this invite code?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDeleteInvite(invite.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {(!usersQuery.data || usersQuery.data.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No users found
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

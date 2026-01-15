@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -14,12 +14,13 @@ import {
   getAllUsers,
   deleteUser,
   updateUserRole,
-  createInviteCode,
-  getAllInviteCodes,
-  deleteInviteCode,
+  createUser,
+  getUserByUsername,
+  hasAnyAdmin,
+  toggleUserActive,
 } from "./db";
+import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
-import { nanoid } from "nanoid";
 import { InsertHlrResult } from "../drizzle/schema";
 
 // Seven.io HLR API response type
@@ -99,6 +100,33 @@ const adminRouter = router({
     return await getAllUsers();
   }),
 
+  // Create a new user (admin only)
+  createUser: adminProcedure
+    .input(z.object({
+      username: z.string().min(3).max(64),
+      password: z.string().min(6).max(128),
+      name: z.string().optional(),
+      email: z.string().email().optional(),
+      role: z.enum(["user", "admin"]).default("user"),
+    }))
+    .mutation(async ({ input }) => {
+      // Check if username already exists
+      const existing = await getUserByUsername(input.username);
+      if (existing) {
+        throw new TRPCError({ code: "CONFLICT", message: "Username already exists" });
+      }
+
+      const userId = await createUser({
+        username: input.username,
+        password: input.password,
+        name: input.name,
+        email: input.email,
+        role: input.role,
+      });
+
+      return { userId, username: input.username };
+    }),
+
   // Delete a user
   deleteUser: adminProcedure
     .input(z.object({ userId: z.number() }))
@@ -121,29 +149,14 @@ const adminRouter = router({
       return { success: true };
     }),
 
-  // Create invite code
-  createInvite: adminProcedure
-    .input(z.object({ email: z.string().email().optional() }))
+  // Toggle user active status
+  toggleUserActive: adminProcedure
+    .input(z.object({ userId: z.number(), isActive: z.enum(["yes", "no"]) }))
     .mutation(async ({ ctx, input }) => {
-      const code = nanoid(16);
-      await createInviteCode({
-        code,
-        email: input.email,
-        createdBy: ctx.user.id,
-      });
-      return { code };
-    }),
-
-  // List all invite codes
-  listInvites: adminProcedure.query(async () => {
-    return await getAllInviteCodes();
-  }),
-
-  // Delete invite code
-  deleteInvite: adminProcedure
-    .input(z.object({ inviteId: z.number() }))
-    .mutation(async ({ input }) => {
-      await deleteInviteCode(input.inviteId);
+      if (input.userId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot deactivate yourself" });
+      }
+      await toggleUserActive(input.userId, input.isActive);
       return { success: true };
     }),
 });
@@ -153,11 +166,79 @@ export const appRouter = router({
   admin: adminRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
+    
+    // Login with username/password
+    login: publicProcedure
+      .input(z.object({
+        username: z.string(),
+        password: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await login(input.username, input.password);
+        
+        if (!result) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password" });
+        }
+
+        // Set session cookie
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+
+        return { 
+          success: true, 
+          user: {
+            id: result.user.id,
+            username: result.user.username,
+            name: result.user.name,
+            email: result.user.email,
+            role: result.user.role,
+          }
+        };
+      }),
+
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+
+    // Check if initial setup is needed (no admin exists)
+    needsSetup: publicProcedure.query(async () => {
+      const hasAdmin = await hasAnyAdmin();
+      return { needsSetup: !hasAdmin };
+    }),
+
+    // Initial admin setup (only works if no admin exists)
+    setupAdmin: publicProcedure
+      .input(z.object({
+        username: z.string().min(3).max(64),
+        password: z.string().min(6).max(128),
+        name: z.string().optional(),
+        email: z.string().email().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const hasAdmin = await hasAnyAdmin();
+        if (hasAdmin) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin already exists" });
+        }
+
+        const userId = await createUser({
+          username: input.username,
+          password: input.password,
+          name: input.name,
+          email: input.email,
+          role: "admin",
+        });
+
+        // Auto-login after setup
+        const result = await login(input.username, input.password);
+        if (result) {
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        }
+
+        return { userId, success: true };
+      }),
   }),
 
   hlr: router({

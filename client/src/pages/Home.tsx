@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { 
   Phone, 
   Upload, 
@@ -47,6 +47,15 @@ export default function Home() {
   const [batchName, setBatchName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+
+  // SEO: Set page title and meta description
+  useEffect(() => {
+    document.title = "HLR Bulk Checker - Validate Phone Numbers";
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Bulk HLR lookup service to validate phone numbers, check carrier information, roaming status, and number portability.');
+    }
+  }, []);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -250,6 +259,7 @@ export default function Home() {
         {/* Header */}
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight">HLR Bulk Checker</h1>
+          <h2 className="sr-only">Bulk Phone Number Validation Service</h2>
           <p className="text-muted-foreground">
             Verify phone numbers in bulk using Seven.io HLR lookup
           </p>
