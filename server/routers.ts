@@ -18,6 +18,17 @@ import {
   getUserByUsername,
   hasAnyAdmin,
   toggleUserActive,
+  updateUserPassword,
+  logAction,
+  getActionLogs,
+  checkUserLimits,
+  incrementUserChecks,
+  updateUserLimits,
+  unlockUser,
+  getBalanceAlert,
+  upsertBalanceAlert,
+  getStatistics,
+  getHlrResultsByBatchIdPaginated,
 } from "./db";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
@@ -159,6 +170,61 @@ const adminRouter = router({
       await toggleUserActive(input.userId, input.isActive);
       return { success: true };
     }),
+
+  // Reset user password (admin only)
+  resetUserPassword: adminProcedure
+    .input(z.object({ userId: z.number(), newPassword: z.string().min(6).max(128) }))
+    .mutation(async ({ ctx, input }) => {
+      await updateUserPassword(input.userId, input.newPassword);
+      await logAction({ userId: ctx.user.id, action: "reset_password", details: `Reset password for user ${input.userId}` });
+      return { success: true };
+    }),
+
+  // Unlock user account
+  unlockUser: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await unlockUser(input.userId);
+      await logAction({ userId: ctx.user.id, action: "unlock_user", details: `Unlocked user ${input.userId}` });
+      return { success: true };
+    }),
+
+  // Update user limits
+  updateUserLimits: adminProcedure
+    .input(z.object({ 
+      userId: z.number(), 
+      dailyLimit: z.number().nullable(), 
+      monthlyLimit: z.number().nullable() 
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await updateUserLimits(input.userId, input.dailyLimit, input.monthlyLimit);
+      await logAction({ userId: ctx.user.id, action: "update_limits", details: `Updated limits for user ${input.userId}` });
+      return { success: true };
+    }),
+
+  // Get action logs
+  getActionLogs: adminProcedure
+    .input(z.object({ userId: z.number().optional(), limit: z.number().default(100) }))
+    .query(async ({ input }) => {
+      return await getActionLogs(input.userId, input.limit);
+    }),
+
+  // Get all statistics
+  getStatistics: adminProcedure.query(async () => {
+    return await getStatistics();
+  }),
+
+  // Balance alert settings
+  getBalanceAlert: adminProcedure.query(async () => {
+    return await getBalanceAlert();
+  }),
+
+  updateBalanceAlert: adminProcedure
+    .input(z.object({ threshold: z.number().min(1), isEnabled: z.enum(["yes", "no"]) }))
+    .mutation(async ({ input }) => {
+      await upsertBalanceAlert(input.threshold, input.isEnabled);
+      return { success: true };
+    }),
 });
 
 export const appRouter = router({
@@ -177,6 +243,24 @@ export const appRouter = router({
         const result = await login(input.username, input.password);
         
         if (!result) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password" });
+        }
+        
+        // Check if account is locked
+        if ('locked' in result && result.locked) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Account is locked. Try again in 15 minutes." });
+        }
+        
+        // Check if login failed with attempts info
+        if ('attemptsLeft' in result && !('user' in result)) {
+          throw new TRPCError({ 
+            code: "UNAUTHORIZED", 
+            message: `Invalid password. ${result.attemptsLeft} attempts remaining.` 
+          });
+        }
+        
+        // Successful login
+        if (!('user' in result) || !('token' in result)) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password" });
         }
 
@@ -201,6 +285,22 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+
+    // Change own password
+    changePassword: protectedProcedure
+      .input(z.object({
+        currentPassword: z.string(),
+        newPassword: z.string().min(6).max(128),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await import("./db").then(m => m.verifyPassword(ctx.user.username, input.currentPassword));
+        if (!result.user) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Current password is incorrect" });
+        }
+        await updateUserPassword(ctx.user.id, input.newPassword);
+        await logAction({ userId: ctx.user.id, action: "change_password", details: "Changed own password" });
+        return { success: true };
+      }),
 
     // Check if initial setup is needed (no admin exists)
     needsSetup: publicProcedure.query(async () => {
@@ -232,7 +332,7 @@ export const appRouter = router({
 
         // Auto-login after setup
         const result = await login(input.username, input.password);
-        if (result) {
+        if (result && 'token' in result) {
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
         }
@@ -242,6 +342,46 @@ export const appRouter = router({
   }),
 
   hlr: router({
+    // Single phone number check (quick check)
+    checkSingle: protectedProcedure
+      .input(z.object({ phoneNumber: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        // Check limits
+        const limitsCheck = await checkUserLimits(ctx.user.id, 1);
+        if (!limitsCheck.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
+        }
+
+        const hlrResponse = await performHlrLookup(input.phoneNumber.trim());
+        
+        // Increment user checks
+        await incrementUserChecks(ctx.user.id, 1);
+        await logAction({ userId: ctx.user.id, action: "single_check", details: input.phoneNumber });
+
+        if ("error" in hlrResponse) {
+          return {
+            success: false,
+            phoneNumber: input.phoneNumber,
+            error: hlrResponse.error,
+          };
+        }
+
+        return {
+          success: true,
+          phoneNumber: input.phoneNumber,
+          internationalFormat: hlrResponse.international_format_number,
+          nationalFormat: hlrResponse.national_format_number,
+          countryCode: hlrResponse.country_code,
+          countryName: hlrResponse.country_name,
+          currentCarrier: hlrResponse.current_carrier?.name,
+          networkType: hlrResponse.current_carrier?.network_type,
+          isValid: hlrResponse.valid_number === "valid",
+          isRoaming: hlrResponse.roaming === "true",
+          isPorted: hlrResponse.ported === "true",
+          reachable: hlrResponse.reachable,
+        };
+      }),
+
     // Start a new HLR batch check
     startBatch: protectedProcedure
       .input(z.object({
@@ -250,6 +390,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const { name, phoneNumbers } = input;
+        
+        // Check limits before starting
+        const limitsCheck = await checkUserLimits(ctx.user.id, phoneNumbers.length);
+        if (!limitsCheck.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
+        }
         
         // Create batch record
         const batchId = await createHlrBatch({
@@ -332,6 +478,10 @@ export const appRouter = router({
           invalidNumbers: invalidCount,
           completedAt: new Date(),
         });
+        
+        // Increment user checks and log action
+        await incrementUserChecks(ctx.user.id, phoneNumbers.length);
+        await logAction({ userId: ctx.user.id, action: "batch_check", details: `Checked ${phoneNumbers.length} numbers` });
 
         return { batchId, totalProcessed: phoneNumbers.length };
       }),
@@ -352,15 +502,58 @@ export const appRouter = router({
       return await getHlrBatchesByUserId(ctx.user.id);
     }),
 
-    // Get results for a specific batch
+    // Get results for a specific batch (with pagination)
     getResults: protectedProcedure
-      .input(z.object({ batchId: z.number() }))
+      .input(z.object({ 
+        batchId: z.number(),
+        page: z.number().default(1),
+        pageSize: z.number().default(50),
+      }))
       .query(async ({ ctx, input }) => {
         const batch = await getHlrBatchById(input.batchId);
         if (!batch || batch.userId !== ctx.user.id) {
-          return [];
+          return { results: [], total: 0, pages: 0 };
         }
-        return await getHlrResultsByBatchId(input.batchId);
+        return await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
+      }),
+
+    // Re-check numbers from a previous batch
+    recheckBatch: protectedProcedure
+      .input(z.object({ batchId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const batch = await getHlrBatchById(input.batchId);
+        if (!batch || batch.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+        }
+        
+        // Get original results to extract phone numbers
+        const originalResults = await getHlrResultsByBatchId(input.batchId);
+        const phoneNumbers = originalResults.map(r => r.phoneNumber);
+        
+        if (phoneNumbers.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No phone numbers to recheck" });
+        }
+        
+        // Check limits
+        const limitsCheck = await checkUserLimits(ctx.user.id, phoneNumbers.length);
+        if (!limitsCheck.allowed) {
+          throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
+        }
+        
+        // Create new batch
+        const newBatchId = await createHlrBatch({
+          userId: ctx.user.id,
+          name: `Recheck: ${batch.name}`,
+          totalNumbers: phoneNumbers.length,
+          processedNumbers: 0,
+          validNumbers: 0,
+          invalidNumbers: 0,
+          status: "processing",
+        });
+        
+        await logAction({ userId: ctx.user.id, action: "recheck_batch", details: `Rechecking batch ${input.batchId}` });
+        
+        return { newBatchId, phoneNumbers };
       }),
 
     // Delete a batch and its results
@@ -375,8 +568,30 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // Check API balance
-    getBalance: publicProcedure.query(async () => {
+    // Get user statistics
+    getUserStats: protectedProcedure.query(async ({ ctx }) => {
+      const stats = await getStatistics(ctx.user.id);
+      const userLimits = await getAllUsers().then(users => users.find(u => u.id === ctx.user.id));
+      return {
+        totalBatches: stats.totalBatches,
+        totalChecks: stats.totalChecks,
+        validNumbers: stats.validChecks,
+        invalidNumbers: stats.invalidChecks,
+        checksToday: stats.todayChecks,
+        checksThisMonth: stats.monthChecks,
+        limits: {
+          dailyLimit: userLimits?.dailyLimit || 0,
+          monthlyLimit: userLimits?.monthlyLimit || 0,
+        }
+      };
+    }),
+
+    // Check API balance (admin only)
+    getBalance: protectedProcedure.query(async ({ ctx }) => {
+      // Only admins can see the balance
+      if (ctx.user.role !== "admin") {
+        return { balance: null, currency: "EUR", restricted: true };
+      }
       const apiKey = process.env.SEVEN_IO_API_KEY;
       if (!apiKey) {
         return { balance: 0, currency: "EUR", error: "API key not configured" };

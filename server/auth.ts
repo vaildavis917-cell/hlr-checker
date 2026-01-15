@@ -65,10 +65,17 @@ export async function authenticateRequest(req: Request): Promise<User | null> {
   return user;
 }
 
-export async function login(username: string, password: string): Promise<{ user: User; token: string } | null> {
-  const user = await db.verifyPassword(username, password);
-  if (!user) return null;
+export async function login(username: string, password: string): Promise<{ user: User; token: string } | { locked: boolean; attemptsLeft: number } | null> {
+  const result = await db.verifyPassword(username, password);
+  
+  if (result.locked) {
+    return { locked: true, attemptsLeft: 0 };
+  }
+  
+  if (!result.user) {
+    return result.attemptsLeft < 5 ? { locked: false, attemptsLeft: result.attemptsLeft } : null;
+  }
 
-  const token = await createSession(user);
-  return { user, token };
+  const token = await createSession(result.user);
+  return { user: result.user, token };
 }

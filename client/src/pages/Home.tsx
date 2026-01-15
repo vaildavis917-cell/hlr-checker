@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useMemo, useEffect } from "react";
 import { 
   Phone, 
@@ -66,13 +67,26 @@ export default function Home() {
   const [sortField, setSortField] = useState<SortField>("phoneNumber");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
+  // Auth
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  
+  // Single check state
+  const [singlePhone, setSinglePhone] = useState("");
+  const [singleResult, setSingleResult] = useState<any>(null);
+  const [isSingleChecking, setIsSingleChecking] = useState(false);
+  const singleCheckMutation = trpc.hlr.checkSingle.useMutation();
+  
   // API queries
-  const balanceQuery = trpc.hlr.getBalance.useQuery();
+  const balanceQuery = trpc.hlr.getBalance.useQuery(undefined, { enabled: isAdmin });
   const batchesQuery = trpc.hlr.listBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
-    currentBatchId !== null ? { batchId: currentBatchId } : { batchId: -1 },
+    currentBatchId !== null ? { batchId: currentBatchId, page: 1, pageSize: 1000 } : { batchId: -1, page: 1, pageSize: 1000 },
     { enabled: currentBatchId !== null && currentBatchId > 0 }
   );
+  
+  // Extract results array from paginated response
+  const resultsData = resultsQuery.data?.results || [];
   const startBatchMutation = trpc.hlr.startBatch.useMutation();
 
   // Parse phone numbers from input
@@ -145,7 +159,7 @@ export default function Home() {
 
   // Export results to CSV
   const handleExportCSV = () => {
-    if (!resultsQuery.data || resultsQuery.data.length === 0) {
+    if (!resultsData || resultsData.length === 0) {
       toast.error("No results to export");
       return;
     }
@@ -165,7 +179,7 @@ export default function Home() {
       "Status"
     ];
 
-    const rows = resultsQuery.data.map(r => [
+    const rows = resultsData.map(r => [
       r.phoneNumber,
       r.internationalFormat || "",
       r.validNumber || "",
@@ -193,19 +207,19 @@ export default function Home() {
 
   // Get unique values for filters
   const filterOptions = useMemo(() => {
-    if (!resultsQuery.data) return { countries: [], operators: [] };
+    if (!resultsData || resultsData.length === 0) return { countries: [] as string[], operators: [] as string[] };
     
-    const countries = Array.from(new Set(resultsQuery.data.map(r => r.countryName).filter(Boolean)));
-    const operators = Array.from(new Set(resultsQuery.data.map(r => r.currentCarrierName).filter(Boolean)));
+    const countries = Array.from(new Set(resultsData.map(r => r.countryName).filter((x): x is string => Boolean(x))));
+    const operators = Array.from(new Set(resultsData.map(r => r.currentCarrierName).filter((x): x is string => Boolean(x))));
     
     return { countries, operators };
-  }, [resultsQuery.data]);
+  }, [resultsData]);
 
   // Filter and sort results
   const filteredResults = useMemo(() => {
-    if (!resultsQuery.data) return [];
+    if (!resultsData || resultsData.length === 0) return [];
     
-    let filtered = [...resultsQuery.data];
+    let filtered = [...resultsData];
     
     // Apply filters
     if (statusFilter !== "all") {
@@ -227,7 +241,7 @@ export default function Home() {
     });
     
     return filtered;
-  }, [resultsQuery.data, statusFilter, countryFilter, operatorFilter, sortField, sortDirection]);
+  }, [resultsData, statusFilter, countryFilter, operatorFilter, sortField, sortDirection]);
 
   // Toggle sort
   const toggleSort = (field: SortField) => {
@@ -265,22 +279,87 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Balance Card */}
-        <div className="flex items-center gap-4 p-4 rounded-lg border bg-card">
-          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Wallet className="h-5 w-5 text-primary" />
+        {/* Balance Card - Admin Only */}
+        {isAdmin && (
+          <div className="flex items-center gap-4 p-4 rounded-lg border bg-card">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Wallet className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">API Balance</p>
+              <p className="text-xl font-semibold">
+                {balanceQuery.isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  `${balanceQuery.data?.balance?.toFixed(2) || "0.00"} ${balanceQuery.data?.currency || "EUR"}`
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">API Balance</p>
-            <p className="text-xl font-semibold">
-              {balanceQuery.isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                `${balanceQuery.data?.balance?.toFixed(2) || "0.00"} ${balanceQuery.data?.currency || "EUR"}`
-              )}
-            </p>
-          </div>
-        </div>
+        )}
+
+        {/* Single Phone Check */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Quick Check
+            </CardTitle>
+            <CardDescription>
+              Check a single phone number instantly
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                placeholder="+1234567890"
+                value={singlePhone}
+                onChange={(e) => setSinglePhone(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                onClick={async () => {
+                  if (!singlePhone.trim()) {
+                    toast.error("Enter a phone number");
+                    return;
+                  }
+                  setIsSingleChecking(true);
+                  try {
+                    const result = await singleCheckMutation.mutateAsync({ phoneNumber: singlePhone.trim() });
+                    setSingleResult(result);
+                    if (result.success) {
+                      toast.success("Number checked successfully");
+                    } else {
+                      toast.error(result.error || "Check failed");
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || "Failed to check number");
+                  } finally {
+                    setIsSingleChecking(false);
+                  }
+                }}
+                disabled={isSingleChecking || !singlePhone.trim()}
+              >
+                {isSingleChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </Button>
+            </div>
+            
+            {singleResult && (
+              <div className="mt-4 p-4 rounded-lg border bg-muted/50">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="text-muted-foreground">Number:</span> {singleResult.phoneNumber}</div>
+                  <div><span className="text-muted-foreground">Status:</span> {singleResult.isValid ? <Badge className="bg-success">Valid</Badge> : <Badge variant="destructive">Invalid</Badge>}</div>
+                  {singleResult.internationalFormat && <div><span className="text-muted-foreground">International:</span> {singleResult.internationalFormat}</div>}
+                  {singleResult.countryName && <div><span className="text-muted-foreground">Country:</span> {singleResult.countryName}</div>}
+                  {singleResult.currentCarrier && <div><span className="text-muted-foreground">Carrier:</span> {singleResult.currentCarrier}</div>}
+                  {singleResult.networkType && <div><span className="text-muted-foreground">Network:</span> {singleResult.networkType}</div>}
+                  <div><span className="text-muted-foreground">Roaming:</span> {singleResult.isRoaming ? "Yes" : "No"}</div>
+                  <div><span className="text-muted-foreground">Ported:</span> {singleResult.isPorted ? "Yes" : "No"}</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Main Content */}
         <div className="grid gap-6 lg:grid-cols-2">
@@ -442,7 +521,7 @@ export default function Home() {
                 <div>
                   <CardTitle>Results</CardTitle>
                   <CardDescription>
-                    {filteredResults.length} of {resultsQuery.data?.length || 0} results
+                    {filteredResults.length} of {resultsQuery.data?.total || resultsData.length} results
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">

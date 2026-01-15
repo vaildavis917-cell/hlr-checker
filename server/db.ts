@@ -1,6 +1,6 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql, and, gte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -58,21 +58,48 @@ export async function getUserById(id: number): Promise<User | undefined> {
   return result[0];
 }
 
-export async function verifyPassword(username: string, password: string): Promise<User | null> {
+export async function verifyPassword(username: string, password: string): Promise<{ user: User | null; locked: boolean; attemptsLeft: number }> {
   const user = await getUserByUsername(username);
-  if (!user) return null;
-  if (user.isActive !== "yes") return null;
-
-  const isValid = await bcrypt.compare(password, user.passwordHash);
-  if (!isValid) return null;
-
-  // Update last signed in
-  const db = await getDb();
-  if (db) {
-    await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
+  if (!user) return { user: null, locked: false, attemptsLeft: 5 };
+  if (user.isActive !== "yes") return { user: null, locked: false, attemptsLeft: 0 };
+  
+  // Check if account is locked
+  if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+    return { user: null, locked: true, attemptsLeft: 0 };
   }
 
-  return user;
+  const isValid = await bcrypt.compare(password, user.passwordHash);
+  const db = await getDb();
+  
+  if (!isValid) {
+    // Increment failed attempts
+    const newAttempts = (user.failedLoginAttempts || 0) + 1;
+    const updates: Partial<InsertUser> = { failedLoginAttempts: newAttempts };
+    
+    // Lock account after 5 failed attempts for 15 minutes
+    if (newAttempts >= 5) {
+      const lockUntil = new Date();
+      lockUntil.setMinutes(lockUntil.getMinutes() + 15);
+      updates.lockedUntil = lockUntil;
+    }
+    
+    if (db) {
+      await db.update(users).set(updates).where(eq(users.id, user.id));
+    }
+    
+    return { user: null, locked: newAttempts >= 5, attemptsLeft: Math.max(0, 5 - newAttempts) };
+  }
+
+  // Reset failed attempts on successful login
+  if (db) {
+    await db.update(users).set({ 
+      lastSignedIn: new Date(),
+      failedLoginAttempts: 0,
+      lockedUntil: null
+    }).where(eq(users.id, user.id));
+  }
+
+  return { user, locked: false, attemptsLeft: 5 };
 }
 
 export async function updateUserPassword(id: number, newPassword: string): Promise<void> {
@@ -238,4 +265,246 @@ export async function hasAnyAdmin(): Promise<boolean> {
   
   const result = await db.select().from(users).where(eq(users.role, "admin")).limit(1);
   return result.length > 0;
+}
+
+
+// Action logging
+export async function logAction(data: {
+  userId: number;
+  action: string;
+  details?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(actionLogs).values({
+    userId: data.userId,
+    action: data.action,
+    details: data.details || null,
+    ipAddress: data.ipAddress || null,
+    userAgent: data.userAgent || null,
+  });
+}
+
+export async function getActionLogs(userId?: number, limit: number = 100): Promise<ActionLog[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (userId) {
+    return await db.select().from(actionLogs)
+      .where(eq(actionLogs.userId, userId))
+      .orderBy(desc(actionLogs.createdAt))
+      .limit(limit);
+  }
+  
+  return await db.select().from(actionLogs)
+    .orderBy(desc(actionLogs.createdAt))
+    .limit(limit);
+}
+
+// User limits management
+export async function checkUserLimits(userId: number, numbersCount: number): Promise<{ allowed: boolean; reason?: string }> {
+  const db = await getDb();
+  if (!db) return { allowed: true };
+  
+  const user = await getUserById(userId);
+  if (!user) return { allowed: false, reason: "User not found" };
+  
+  const today = new Date().toISOString().split('T')[0];
+  const thisMonth = today.substring(0, 7);
+  
+  let checksToday = user.checksToday || 0;
+  let checksThisMonth = user.checksThisMonth || 0;
+  
+  // Reset daily counter if new day
+  if (user.lastCheckDate !== today) {
+    checksToday = 0;
+  }
+  
+  // Reset monthly counter if new month
+  if (user.lastCheckMonth !== thisMonth) {
+    checksThisMonth = 0;
+  }
+  
+  // Check daily limit
+  if (user.dailyLimit && checksToday + numbersCount > user.dailyLimit) {
+    return { allowed: false, reason: `Daily limit exceeded. Used: ${checksToday}/${user.dailyLimit}` };
+  }
+  
+  // Check monthly limit
+  if (user.monthlyLimit && checksThisMonth + numbersCount > user.monthlyLimit) {
+    return { allowed: false, reason: `Monthly limit exceeded. Used: ${checksThisMonth}/${user.monthlyLimit}` };
+  }
+  
+  return { allowed: true };
+}
+
+export async function incrementUserChecks(userId: number, count: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const user = await getUserById(userId);
+  if (!user) return;
+  
+  const today = new Date().toISOString().split('T')[0];
+  const thisMonth = today.substring(0, 7);
+  
+  let checksToday = user.checksToday || 0;
+  let checksThisMonth = user.checksThisMonth || 0;
+  
+  // Reset if new day/month
+  if (user.lastCheckDate !== today) {
+    checksToday = 0;
+  }
+  if (user.lastCheckMonth !== thisMonth) {
+    checksThisMonth = 0;
+  }
+  
+  await db.update(users).set({
+    checksToday: checksToday + count,
+    checksThisMonth: checksThisMonth + count,
+    lastCheckDate: today,
+    lastCheckMonth: thisMonth,
+  }).where(eq(users.id, userId));
+}
+
+export async function updateUserLimits(userId: number, dailyLimit: number | null, monthlyLimit: number | null): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(users).set({ dailyLimit, monthlyLimit }).where(eq(users.id, userId));
+}
+
+export async function unlockUser(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(users).set({ 
+    failedLoginAttempts: 0,
+    lockedUntil: null 
+  }).where(eq(users.id, userId));
+}
+
+// Balance alerts
+export async function getBalanceAlert(): Promise<BalanceAlert | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(balanceAlerts).limit(1);
+  return result[0];
+}
+
+export async function upsertBalanceAlert(threshold: number, isEnabled: "yes" | "no"): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getBalanceAlert();
+  if (existing) {
+    await db.update(balanceAlerts).set({ threshold, isEnabled }).where(eq(balanceAlerts.id, existing.id));
+  } else {
+    await db.insert(balanceAlerts).values({ threshold, isEnabled });
+  }
+}
+
+export async function updateBalanceAlertSent(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const existing = await getBalanceAlert();
+  if (existing) {
+    await db.update(balanceAlerts).set({ lastAlertSent: new Date() }).where(eq(balanceAlerts.id, existing.id));
+  }
+}
+
+// Statistics
+export async function getStatistics(userId?: number): Promise<{
+  totalBatches: number;
+  totalChecks: number;
+  validChecks: number;
+  invalidChecks: number;
+  todayChecks: number;
+  monthChecks: number;
+}> {
+  const db = await getDb();
+  if (!db) return { totalBatches: 0, totalChecks: 0, validChecks: 0, invalidChecks: 0, todayChecks: 0, monthChecks: 0 };
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  
+  let batches: HlrBatch[];
+  if (userId) {
+    batches = await db.select().from(hlrBatches).where(eq(hlrBatches.userId, userId));
+  } else {
+    batches = await db.select().from(hlrBatches);
+  }
+  
+  const totalBatches = batches.length;
+  const totalChecks = batches.reduce((sum, b) => sum + (b.totalNumbers || 0), 0);
+  const validChecks = batches.reduce((sum, b) => sum + (b.validNumbers || 0), 0);
+  const invalidChecks = batches.reduce((sum, b) => sum + (b.invalidNumbers || 0), 0);
+  
+  const todayBatches = batches.filter(b => new Date(b.createdAt) >= today);
+  const todayChecks = todayBatches.reduce((sum, b) => sum + (b.totalNumbers || 0), 0);
+  
+  const monthBatches = batches.filter(b => new Date(b.createdAt) >= monthStart);
+  const monthChecks = monthBatches.reduce((sum, b) => sum + (b.totalNumbers || 0), 0);
+  
+  return { totalBatches, totalChecks, validChecks, invalidChecks, todayChecks, monthChecks };
+}
+
+// Pagination for results
+export async function getHlrResultsByBatchIdPaginated(
+  batchId: number, 
+  page: number = 1, 
+  pageSize: number = 50
+): Promise<{ results: HlrResult[]; total: number; pages: number }> {
+  const db = await getDb();
+  if (!db) return { results: [], total: 0, pages: 0 };
+  
+  const offset = (page - 1) * pageSize;
+  
+  const results = await db.select().from(hlrResults)
+    .where(eq(hlrResults.batchId, batchId))
+    .orderBy(hlrResults.id)
+    .limit(pageSize)
+    .offset(offset);
+  
+  const countResult = await db.select({ count: sql<number>`count(*)` })
+    .from(hlrResults)
+    .where(eq(hlrResults.batchId, batchId));
+  
+  const total = countResult[0]?.count || 0;
+  const pages = Math.ceil(total / pageSize);
+  
+  return { results, total, pages };
+}
+
+// Get all batches with pagination (for admin)
+export async function getAllBatchesPaginated(
+  page: number = 1,
+  pageSize: number = 20
+): Promise<{ batches: HlrBatch[]; total: number; pages: number }> {
+  const db = await getDb();
+  if (!db) return { batches: [], total: 0, pages: 0 };
+  
+  const offset = (page - 1) * pageSize;
+  
+  const batches = await db.select().from(hlrBatches)
+    .orderBy(desc(hlrBatches.createdAt))
+    .limit(pageSize)
+    .offset(offset);
+  
+  const countResult = await db.select({ count: sql<number>`count(*)` })
+    .from(hlrBatches);
+  
+  const total = countResult[0]?.count || 0;
+  const pages = Math.ceil(total / pageSize);
+  
+  return { batches, total, pages };
 }

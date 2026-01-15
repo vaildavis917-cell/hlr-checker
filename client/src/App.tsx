@@ -8,6 +8,8 @@ import Home from "./pages/Home";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
 import Login from "./pages/Login";
+import Profile from "./pages/Profile";
+import Statistics from "./pages/Statistics";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -17,6 +19,8 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/history"} component={History} />
       <Route path={"/admin"} component={Admin} />
+      <Route path={"/profile"} component={Profile} />
+      <Route path={"/statistics"} component={Statistics} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

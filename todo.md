@@ -55,3 +55,22 @@
 - [x] Add H1 and H2 headings to login page
 - [x] Set proper page title on login page
 - [x] Add meta description for login page
+
+## New Features - Security
+- [x] Change password - users can change their own password
+- [x] Reset password - admin can reset user password
+- [x] Account lockout - block after 5 failed login attempts
+
+## New Features - Limits & Monitoring
+- [x] Check limits - restrict HLR requests per user per day/month
+- [x] Low balance notification - alert when Seven.io balance is low
+- [x] Action logging - record who and when made checks
+
+## New Features - UX Improvements
+- [x] Pagination - for large batches (1000+ numbers)
+- [x] Re-check numbers - re-verify numbers from history
+- [x] Usage statistics - dashboard with check graphs
+
+## UI Restrictions
+- [x] Balance visible only to admin users
+- [x] Single phone number check (quick check without batch)

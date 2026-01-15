@@ -20,6 +20,22 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   isActive: mysqlEnum("isActive", ["yes", "no"]).default("yes").notNull(),
+  /** Failed login attempts counter */
+  failedLoginAttempts: int("failedLoginAttempts").default(0).notNull(),
+  /** Account locked until this time */
+  lockedUntil: timestamp("lockedUntil"),
+  /** Daily check limit (null = unlimited) */
+  dailyLimit: int("dailyLimit"),
+  /** Monthly check limit (null = unlimited) */
+  monthlyLimit: int("monthlyLimit"),
+  /** Checks used today */
+  checksToday: int("checksToday").default(0).notNull(),
+  /** Checks used this month */
+  checksThisMonth: int("checksThisMonth").default(0).notNull(),
+  /** Last check date for daily reset */
+  lastCheckDate: varchar("lastCheckDate", { length: 10 }),
+  /** Last check month for monthly reset */
+  lastCheckMonth: varchar("lastCheckMonth", { length: 7 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -97,3 +113,34 @@ export const inviteCodes = mysqlTable("invite_codes", {
 
 export type InviteCode = typeof inviteCodes.$inferSelect;
 export type InsertInviteCode = typeof inviteCodes.$inferInsert;
+
+/**
+ * Action logs - records user actions for audit
+ */
+export const actionLogs = mysqlTable("action_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  action: varchar("action", { length: 64 }).notNull(),
+  details: text("details"),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ActionLog = typeof actionLogs.$inferSelect;
+export type InsertActionLog = typeof actionLogs.$inferInsert;
+
+/**
+ * Balance alerts - stores low balance notification settings
+ */
+export const balanceAlerts = mysqlTable("balance_alerts", {
+  id: int("id").autoincrement().primaryKey(),
+  threshold: int("threshold").notNull().default(10),
+  lastAlertSent: timestamp("lastAlertSent"),
+  isEnabled: mysqlEnum("isEnabled", ["yes", "no"]).default("yes").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BalanceAlert = typeof balanceAlerts.$inferSelect;
+export type InsertBalanceAlert = typeof balanceAlerts.$inferInsert;

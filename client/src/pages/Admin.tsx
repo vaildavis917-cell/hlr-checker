@@ -52,7 +52,9 @@ import {
   Eye,
   EyeOff,
   UserX,
-  UserCheck
+  UserCheck,
+  KeyRound,
+  Settings2
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -65,6 +67,10 @@ type User = {
   email: string | null;
   role: "user" | "admin";
   isActive: "yes" | "no";
+  dailyLimit: number | null;
+  monthlyLimit: number | null;
+  failedLoginAttempts: number;
+  lockedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
   lastSignedIn: Date;
@@ -82,6 +88,10 @@ export default function Admin() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<"user" | "admin">("user");
+  const [isLimitsDialogOpen, setIsLimitsDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [dailyLimit, setDailyLimit] = useState(0);
+  const [monthlyLimit, setMonthlyLimit] = useState(0);
 
   // Check if user is admin
   if (user && user.role !== "admin") {
@@ -116,6 +126,8 @@ export default function Admin() {
   const deleteUserMutation = trpc.admin.deleteUser.useMutation();
   const updateRoleMutation = trpc.admin.updateUserRole.useMutation();
   const toggleActiveMutation = trpc.admin.toggleUserActive.useMutation();
+  const resetPasswordMutation = trpc.admin.resetUserPassword.useMutation();
+  const updateLimitsMutation = trpc.admin.updateUserLimits.useMutation();
 
   const handleCreateUser = async () => {
     if (!newUsername || !newPassword) {
@@ -178,6 +190,44 @@ export default function Admin() {
       toast.success(isActive === "yes" ? "User activated" : "User deactivated");
     } catch (error) {
       toast.error("Failed to update user status");
+    }
+  };
+
+  const handleResetPassword = async (userId: number, username: string) => {
+    const newPassword = prompt(`Enter new password for ${username} (min 6 characters):`);
+    if (!newPassword) return;
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    try {
+      await resetPasswordMutation.mutateAsync({ userId, newPassword });
+      toast.success("Password reset successfully");
+    } catch (error) {
+      toast.error("Failed to reset password");
+    }
+  };
+
+  const openLimitsDialog = (u: User) => {
+    setSelectedUser(u);
+    setDailyLimit(u.dailyLimit || 0);
+    setMonthlyLimit(u.monthlyLimit || 0);
+    setIsLimitsDialogOpen(true);
+  };
+
+  const handleUpdateLimits = async () => {
+    if (!selectedUser) return;
+    try {
+      await updateLimitsMutation.mutateAsync({
+        userId: selectedUser.id,
+        dailyLimit,
+        monthlyLimit,
+      });
+      usersQuery.refetch();
+      setIsLimitsDialogOpen(false);
+      toast.success("Limits updated successfully");
+    } catch (error) {
+      toast.error("Failed to update limits");
     }
   };
 
@@ -374,6 +424,22 @@ export default function Admin() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => handleResetPassword(u.id, u.username)}
+                                  title="Reset password"
+                                >
+                                  <KeyRound className="h-4 w-4 text-blue-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openLimitsDialog(u)}
+                                  title="Set limits"
+                                >
+                                  <Settings2 className="h-4 w-4 text-purple-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleToggleActive(u.id, u.isActive === "yes" ? "no" : "yes")}
                                   title={u.isActive === "yes" ? "Deactivate user" : "Activate user"}
                                 >
@@ -427,6 +493,55 @@ export default function Admin() {
             )}
           </CardContent>
         </Card>
+
+        {/* Limits Dialog */}
+        <Dialog open={isLimitsDialogOpen} onOpenChange={setIsLimitsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Set User Limits</DialogTitle>
+              <DialogDescription>
+                Configure daily and monthly check limits for {selectedUser?.name || selectedUser?.username}.
+                Set to 0 for unlimited.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="dailyLimit">Daily Limit</Label>
+                <Input
+                  id="dailyLimit"
+                  type="number"
+                  min="0"
+                  value={dailyLimit}
+                  onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
+                  placeholder="0 = Unlimited"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="monthlyLimit">Monthly Limit</Label>
+                <Input
+                  id="monthlyLimit"
+                  type="number"
+                  min="0"
+                  value={monthlyLimit}
+                  onChange={(e) => setMonthlyLimit(parseInt(e.target.value) || 0)}
+                  placeholder="0 = Unlimited"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsLimitsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateLimits} disabled={updateLimitsMutation.isPending}>
+                {updateLimitsMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+                ) : (
+                  "Save Limits"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

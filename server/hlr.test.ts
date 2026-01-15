@@ -29,17 +29,55 @@ function createAuthContext(): TrpcContext {
   };
 }
 
+function createAdminContext(): TrpcContext {
+  const user: AuthenticatedUser = {
+    id: 1,
+    openId: "admin-user-123",
+    email: "admin@example.com",
+    name: "Admin User",
+    loginMethod: "password",
+    role: "admin",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  };
+
+  return {
+    user,
+    req: {
+      protocol: "https",
+      headers: {},
+    } as TrpcContext["req"],
+    res: {
+      clearCookie: vi.fn(),
+    } as unknown as TrpcContext["res"],
+  };
+}
+
 describe("HLR Router", () => {
-  it("should have getBalance procedure that returns balance info", async () => {
+  it("should have getBalance procedure that returns restricted for non-admin", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
     const result = await caller.hlr.getBalance();
 
-    // Should return balance object with amount and currency
+    // Non-admin should get restricted response
     expect(result).toHaveProperty("balance");
     expect(result).toHaveProperty("currency");
-    expect(typeof result.balance).toBe("number");
+    expect(result).toHaveProperty("restricted");
+    expect(result.restricted).toBe(true);
+    expect(result.balance).toBe(null);
+  });
+
+  it("should have getBalance procedure that returns balance for admin", async () => {
+    const ctx = createAdminContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const result = await caller.hlr.getBalance();
+
+    // Admin should get actual balance
+    expect(result).toHaveProperty("balance");
+    expect(result).toHaveProperty("currency");
     expect(typeof result.currency).toBe("string");
   });
 
