@@ -61,8 +61,8 @@ export default function Home() {
   const balanceQuery = trpc.hlr.getBalance.useQuery();
   const batchesQuery = trpc.hlr.listBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
-    { batchId: currentBatchId! },
-    { enabled: currentBatchId !== null }
+    currentBatchId !== null ? { batchId: currentBatchId } : { batchId: -1 },
+    { enabled: currentBatchId !== null && currentBatchId > 0 }
   );
   const startBatchMutation = trpc.hlr.startBatch.useMutation();
 

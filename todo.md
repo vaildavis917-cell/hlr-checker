@@ -33,3 +33,6 @@
 - [x] Dark theme support with toggle
 - [x] Clean white backgrounds with thin lines
 - [x] Modern typography and spacing
+
+## Bugs
+- [x] Fix: getResults query called with null batchId causing validation error
