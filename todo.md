@@ -50,3 +50,8 @@
 - [x] Set proper page title (30-60 characters)
 - [x] Add meta description (50-160 characters)
 - [x] Add keywords meta tag
+
+## SEO Fixes - Login Page
+- [x] Add H1 and H2 headings to login page
+- [x] Set proper page title on login page
+- [x] Add meta description for login page

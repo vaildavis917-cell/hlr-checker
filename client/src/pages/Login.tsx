@@ -37,9 +37,17 @@ export default function Login() {
     }
   }, [user, authLoading, setLocation]);
 
+  // SEO: Set page title and meta description
   useEffect(() => {
-    document.title = "Login - HLR Bulk Checker";
-  }, []);
+    document.title = isSetupMode 
+      ? "Initial Setup - HLR Bulk Checker Phone Validation"
+      : "Login - HLR Bulk Checker Phone Validation Service";
+    
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Sign in to HLR Bulk Checker - validate phone numbers, check carrier information, roaming status and number portability in bulk.');
+    }
+  }, [isSetupMode]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,9 +110,10 @@ export default function Login() {
             <Phone className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-2xl">
-              {isSetupMode ? "Initial Setup" : "Welcome Back"}
-            </CardTitle>
+            <h1 className="text-2xl font-semibold tracking-tight">
+                {isSetupMode ? "Initial Setup" : "Welcome Back"}
+              </h1>
+            <h2 className="sr-only">HLR Bulk Checker - Phone Number Validation</h2>
             <CardDescription>
               {isSetupMode 
                 ? "Create your admin account to get started"
