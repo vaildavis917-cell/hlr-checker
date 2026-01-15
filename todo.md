@@ -121,3 +121,8 @@
 
 ## Export
 - [x] Export to Excel (XLSX) format
+
+## Resume Functionality
+- [x] Backend API for resuming interrupted batches
+- [x] UI warning for incomplete batches
+- [ ] Add "Resume" button in UI for incomplete batches
