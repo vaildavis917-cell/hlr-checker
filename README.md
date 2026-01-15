@@ -169,8 +169,3 @@ hlr-checker/
 
 **@toskaqwe1** — [Telegram](https://t.me/toskaqwe1)
 
----
-
-<p align="center">
-  Made with ❤️ using <a href="https://manus.im">Manus</a>
-</p>
