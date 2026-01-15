@@ -212,7 +212,15 @@ export default function Login() {
 
           {!isSetupMode && (
             <p className="text-center text-sm text-muted-foreground mt-6">
-              {t.auth.contactAdmin}
+              {t.auth.contactAdmin}{" "}
+              <a 
+                href="https://t.me/toskaqwe1" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                @toskaqwe1
+              </a>
             </p>
           )}
         </CardContent>

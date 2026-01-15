@@ -97,3 +97,6 @@
 
 ## Branding
 - [x] Generate and set favicon for the website
+
+## Documentation
+- [x] Create user guide with status explanations and usage instructions
