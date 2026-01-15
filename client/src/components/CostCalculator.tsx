@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Calculator, AlertTriangle, Copy, CheckCircle2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import t from "@/lib/i18n";
 
 interface CostCalculatorProps {
   phoneNumbers: string[];
@@ -32,7 +33,7 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
         <CardContent className="py-3">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calculator className="h-4 w-4 animate-pulse" />
-            <span className="text-sm">Analyzing numbers...</span>
+            <span className="text-sm">{t.cost.analyzing}</span>
           </div>
         </CardContent>
       </Card>
@@ -54,7 +55,7 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
             <div className="flex items-center gap-2">
               <Calculator className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">
-                {data.uniqueCount} unique number{data.uniqueCount !== 1 ? "s" : ""}
+                {data.uniqueCount} {t.cost.uniqueNumbers}
               </span>
             </div>
 
@@ -62,14 +63,14 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50">
                   <Copy className="h-3 w-3 mr-1" />
-                  {data.duplicateCount} duplicate{data.duplicateCount !== 1 ? "s" : ""}
+                  {data.duplicateCount} {t.cost.duplicates}
                 </Badge>
                 {onRemoveDuplicates && (
                   <button
                     onClick={onRemoveDuplicates}
                     className="text-xs text-primary hover:underline"
                   >
-                    Remove
+                    {t.cost.remove}
                   </button>
                 )}
               </div>
@@ -78,19 +79,19 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
             {!hasDuplicates && data.uniqueCount > 0 && (
               <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">
                 <CheckCircle2 className="h-3 w-3 mr-1" />
-                No duplicates
+                {t.cost.noDuplicates}
               </Badge>
             )}
           </div>
 
           {/* Cost Estimate */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Estimated cost:</span>
+            <span className="text-sm text-muted-foreground">{t.cost.estimatedCost}:</span>
             <span className="text-sm font-semibold">
               {data.estimatedCost.toFixed(2)} {data.currency}
             </span>
             <span className="text-xs text-muted-foreground">
-              (€0.02/number)
+              (€0.02/{t.cost.perNumber})
             </span>
           </div>
         </div>
@@ -100,7 +101,7 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
           <div className="mt-3 pt-3 border-t">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-orange-500" />
-              <span className="text-xs font-medium text-orange-700">Duplicate numbers found:</span>
+              <span className="text-xs font-medium text-orange-700">{t.cost.duplicatesFound}:</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {data.duplicates.map((dup, i) => (
@@ -117,7 +118,7 @@ export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: Cos
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-orange-500" />
               <span className="text-xs text-orange-700">
-                {data.duplicates.length} numbers appear multiple times. Duplicates will be automatically removed during check.
+                {data.duplicates.length} {t.cost.multipleAppearances}
               </span>
             </div>
           </div>

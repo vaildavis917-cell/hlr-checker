@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Heart, HeartCrack, HeartPulse } from "lucide-react";
+import t from "@/lib/i18n";
 
 interface HealthScoreBadgeProps {
   score: number;
@@ -18,11 +19,11 @@ export default function HealthScoreBadge({ score, showLabel = false, size = "md"
   };
 
   const getScoreLabel = (score: number) => {
-    if (score >= 80) return "Excellent";
-    if (score >= 60) return "Good";
-    if (score >= 40) return "Fair";
-    if (score >= 20) return "Poor";
-    return "Bad";
+    if (score >= 80) return t.health.excellent;
+    if (score >= 60) return t.health.good;
+    if (score >= 40) return t.health.fair;
+    if (score >= 20) return t.health.poor;
+    return t.health.bad;
   };
 
   const getIcon = (score: number) => {
@@ -49,16 +50,16 @@ export default function HealthScoreBadge({ score, showLabel = false, size = "md"
         </TooltipTrigger>
         <TooltipContent>
           <div className="text-sm">
-            <p className="font-medium">Health Score: {score}/100</p>
-            <p className="text-muted-foreground">{getScoreLabel(score)} quality number</p>
+            <p className="font-medium">{t.health.healthScore}: {score}/100</p>
+            <p className="text-muted-foreground">{getScoreLabel(score)}</p>
             <div className="mt-2 text-xs space-y-1">
-              <p>Based on:</p>
+              <p>{t.health.basedOn}:</p>
               <ul className="list-disc list-inside">
-                <li>Validity (40 pts)</li>
-                <li>Reachability (25 pts)</li>
-                <li>Porting status (15 pts)</li>
-                <li>Roaming status (10 pts)</li>
-                <li>Network type (10 pts)</li>
+                <li>{t.health.validity} (40 {t.health.pts})</li>
+                <li>{t.health.reachability} (25 {t.health.pts})</li>
+                <li>{t.health.portingStatus} (15 {t.health.pts})</li>
+                <li>{t.health.roamingStatus} (10 {t.health.pts})</li>
+                <li>{t.health.networkType} (10 {t.health.pts})</li>
               </ul>
             </div>
           </div>

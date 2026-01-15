@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Settings2, Plus, Trash2, Star, Loader2 } from "lucide-react";
+import t from "@/lib/i18n";
 
 interface ExportTemplatesDialogProps {
   onSelectTemplate: (fields: string[]) => void;
@@ -43,11 +44,11 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
 
   const handleCreateTemplate = async () => {
     if (!newTemplateName.trim()) {
-      toast.error("Enter template name");
+      toast.error(t.export.enterTemplateName);
       return;
     }
     if (selectedFields.length === 0) {
-      toast.error("Select at least one field");
+      toast.error(t.export.selectAtLeastOne);
       return;
     }
 
@@ -57,40 +58,40 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
         fields: selectedFields,
         isDefault: false,
       });
-      toast.success("Template created");
+      toast.success(t.export.templateCreated);
       setNewTemplateName("");
       setSelectedFields([]);
       setIsCreating(false);
       templatesQuery.refetch();
     } catch (error) {
-      toast.error("Failed to create template");
+      toast.error(t.export.failedToCreate);
     }
   };
 
   const handleDeleteTemplate = async (id: number) => {
     try {
       await deleteMutation.mutateAsync({ id });
-      toast.success("Template deleted");
+      toast.success(t.export.templateDeleted);
       templatesQuery.refetch();
     } catch (error) {
-      toast.error("Failed to delete template");
+      toast.error(t.export.failedToDelete);
     }
   };
 
   const handleSetDefault = async (id: number) => {
     try {
       await updateMutation.mutateAsync({ id, isDefault: true });
-      toast.success("Default template updated");
+      toast.success(t.export.defaultUpdated);
       templatesQuery.refetch();
     } catch (error) {
-      toast.error("Failed to update template");
+      toast.error(t.export.failedToUpdate);
     }
   };
 
   const handleUseTemplate = (fields: string[]) => {
     onSelectTemplate(fields);
     setOpen(false);
-    toast.success("Template applied");
+    toast.success(t.export.templateApplied);
   };
 
   const handleSelectAll = () => {
@@ -108,27 +109,27 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Settings2 className="h-4 w-4 mr-2" />
-          Export Settings
+          {t.export.exportSettings}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Export Templates</DialogTitle>
+          <DialogTitle>{t.export.exportTemplates}</DialogTitle>
           <DialogDescription>
-            Create and manage custom export templates to select which fields to include in CSV exports.
+            {t.export.description}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Saved Templates */}
           <div>
-            <h3 className="text-sm font-medium mb-3">Saved Templates</h3>
+            <h3 className="text-sm font-medium mb-3">{t.export.savedTemplates}</h3>
             {templatesQuery.isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : templatesQuery.data?.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">No saved templates yet</p>
+              <p className="text-sm text-muted-foreground py-4">{t.export.noTemplates}</p>
             ) : (
               <div className="space-y-2">
                 {templatesQuery.data?.map((template) => (
@@ -141,11 +142,11 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
                       {template.isDefault === "yes" && (
                         <Badge variant="secondary" className="text-xs">
                           <Star className="h-3 w-3 mr-1 fill-current" />
-                          Default
+                          {t.export.default}
                         </Badge>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {template.fields?.length || 0} fields
+                        {template.fields?.length || 0} {t.export.fields}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -154,7 +155,7 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
                         size="sm"
                         onClick={() => handleUseTemplate(template.fields || [])}
                       >
-                        Use
+                        {t.export.use}
                       </Button>
                       {template.isDefault !== "yes" && (
                         <Button 
@@ -183,10 +184,10 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
           {isCreating ? (
             <div className="space-y-4 p-4 rounded-lg border bg-muted/50">
               <div className="space-y-2">
-                <Label htmlFor="templateName">Template Name</Label>
+                <Label htmlFor="templateName">{t.export.templateName}</Label>
                 <Input
                   id="templateName"
-                  placeholder="e.g., Basic Export, Full Details..."
+                  placeholder={t.export.templateNamePlaceholder}
                   value={newTemplateName}
                   onChange={(e) => setNewTemplateName(e.target.value)}
                 />
@@ -194,13 +195,13 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Select Fields</Label>
+                  <Label>{t.export.selectFields}</Label>
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                      Select All
+                      {t.export.selectAll}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={handleSelectNone}>
-                      Clear
+                      {t.export.clear}
                     </Button>
                   </div>
                 </div>
@@ -226,30 +227,30 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
               <div className="flex gap-2">
                 <Button onClick={handleCreateTemplate} disabled={createMutation.isPending}>
                   {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Save Template
+                  {t.export.saveTemplate}
                 </Button>
                 <Button variant="outline" onClick={() => setIsCreating(false)}>
-                  Cancel
+                  {t.common.cancel}
                 </Button>
               </div>
             </div>
           ) : (
             <Button variant="outline" onClick={() => setIsCreating(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Create New Template
+              {t.export.createNew}
             </Button>
           )}
 
           {/* Quick Export Options */}
           <div>
-            <h3 className="text-sm font-medium mb-3">Quick Export</h3>
+            <h3 className="text-sm font-medium mb-3">{t.export.quickExport}</h3>
             <div className="flex flex-wrap gap-2">
               <Button 
                 variant="secondary" 
                 size="sm"
                 onClick={() => handleUseTemplate(["phoneNumber", "validNumber", "currentCarrierName", "countryName"])}
               >
-                Basic (4 fields)
+                {t.export.basic} (4 {t.export.fields})
               </Button>
               <Button 
                 variant="secondary" 
@@ -259,14 +260,14 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
                   "countryName", "currentCarrierName", "ported", "roaming", "healthScore"
                 ])}
               >
-                Standard (9 fields)
+                {t.export.standard} (9 {t.export.fields})
               </Button>
               <Button 
                 variant="secondary" 
                 size="sm"
                 onClick={() => handleUseTemplate(fieldsQuery.data?.map(f => f.key) || [])}
               >
-                Full (all fields)
+                {t.export.full} ({t.export.allFields})
               </Button>
             </div>
           </div>
@@ -274,7 +275,7 @@ export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTempla
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
-            Close
+            {t.common.close}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Loader2, Eye, EyeOff, Phone, Lock, User } from "lucide-react";
 import { toast } from "sonner";
+import t from "@/lib/i18n";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -40,12 +41,12 @@ export default function Login() {
   // SEO: Set page title and meta description
   useEffect(() => {
     document.title = isSetupMode 
-      ? "Initial Setup - HLR Bulk Checker Phone Validation"
-      : "Login - HLR Bulk Checker Phone Validation Service";
+      ? "Первоначальная настройка - HLR Bulk Checker"
+      : "Вход - HLR Bulk Checker";
     
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Sign in to HLR Bulk Checker - validate phone numbers, check carrier information, roaming status and number portability in bulk.');
+      metaDescription.setAttribute('content', 'Войдите в HLR Bulk Checker для проверки телефонных номеров, информации об операторе, статуса роуминга и портирования.');
     }
   }, [isSetupMode]);
 
@@ -53,17 +54,17 @@ export default function Login() {
     e.preventDefault();
     
     if (!username || !password) {
-      toast.error("Please enter username and password");
+      toast.error("Введите имя пользователя и пароль");
       return;
     }
 
     try {
       await loginMutation.mutateAsync({ username, password });
-      toast.success("Login successful!");
+      toast.success("Вход выполнен успешно!");
       await refresh();
       setLocation("/");
     } catch (error: any) {
-      toast.error(error.message || "Invalid username or password");
+      toast.error(error.message || t.auth.invalidCredentials);
     }
   };
 
@@ -71,11 +72,11 @@ export default function Login() {
     e.preventDefault();
     
     if (!username || !password) {
-      toast.error("Please enter username and password");
+      toast.error("Введите имя пользователя и пароль");
       return;
     }
     if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      toast.error("Пароль должен быть не менее 6 символов");
       return;
     }
 
@@ -86,11 +87,11 @@ export default function Login() {
         name: setupName || undefined,
         email: setupEmail || undefined,
       });
-      toast.success("Admin account created! You are now logged in.");
+      toast.success("Аккаунт администратора создан! Вы вошли в систему.");
       await refresh();
       setLocation("/");
     } catch (error: any) {
-      toast.error(error.message || "Failed to create admin account");
+      toast.error(error.message || "Не удалось создать аккаунт администратора");
     }
   };
 
@@ -111,13 +112,13 @@ export default function Login() {
           </div>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-                {isSetupMode ? "Initial Setup" : "Welcome Back"}
+                {isSetupMode ? "Первоначальная настройка" : t.auth.welcomeBack}
               </h1>
             <h2 className="sr-only">HLR Bulk Checker - Phone Number Validation</h2>
             <CardDescription>
               {isSetupMode 
-                ? "Create your admin account to get started"
-                : "Sign in to access HLR Bulk Checker"
+                ? "Создайте аккаунт администратора для начала работы"
+                : t.auth.signInToAccess
               }
             </CardDescription>
           </div>
@@ -125,12 +126,12 @@ export default function Login() {
         <CardContent>
           <form onSubmit={isSetupMode ? handleSetup : handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t.auth.username}</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="username"
-                  placeholder="Enter your username"
+                  placeholder={t.auth.enterUsername}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="pl-10"
@@ -140,13 +141,13 @@ export default function Login() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t.auth.password}</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder={isSetupMode ? "Create a password (min 6 chars)" : "Enter your password"}
+                  placeholder={isSetupMode ? "Создайте пароль (мин. 6 символов)" : t.auth.enterPassword}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10"
@@ -171,16 +172,16 @@ export default function Login() {
             {isSetupMode && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="name">Display Name (optional)</Label>
+                  <Label htmlFor="name">Отображаемое имя (необязательно)</Label>
                   <Input
                     id="name"
-                    placeholder="Your name"
+                    placeholder="Ваше имя"
                     value={setupName}
                     onChange={(e) => setSetupName(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email (optional)</Label>
+                  <Label htmlFor="email">Email (необязательно)</Label>
                   <Input
                     id="email"
                     type="email"
@@ -200,13 +201,13 @@ export default function Login() {
               {(loginMutation.isPending || setupMutation.isPending) ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {isSetupMode ? "Create Admin Account" : "Sign In"}
+              {isSetupMode ? "Создать аккаунт администратора" : t.auth.signIn}
             </Button>
           </form>
 
           {!isSetupMode && (
             <p className="text-center text-sm text-muted-foreground mt-6">
-              Contact your administrator if you need an account
+              {t.auth.contactAdmin}
             </p>
           )}
         </CardContent>

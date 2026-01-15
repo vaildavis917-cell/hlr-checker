@@ -566,7 +566,7 @@ export const appRouter = router({
     startBatch: protectedProcedure
       .input(z.object({
         name: z.string().optional(),
-        phoneNumbers: z.array(z.string()).min(1).max(1000),
+        phoneNumbers: z.array(z.string()).min(1),
         removeDuplicates: z.boolean().default(true),
       }))
       .mutation(async ({ ctx, input }) => {

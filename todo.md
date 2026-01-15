@@ -86,3 +86,8 @@
 - [x] Cost Calculator - show estimated cost before starting batch
 - [x] Export Templates - customizable export with field selection
 - [x] Admin can view all users' check history (batches from all users)
+
+## Localization
+- [x] Add Russian language support for all UI elements
+- [x] Add Health Score filter (low/normal/high) in results table
+- [x] Remove 1000 numbers limit - unlimited for all users

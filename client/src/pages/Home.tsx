@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
+import t from "@/lib/i18n";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
@@ -54,10 +55,10 @@ export default function Home() {
 
   // SEO: Set page title and meta description
   useEffect(() => {
-    document.title = "HLR Bulk Checker - Validate Phone Numbers";
+    document.title = "HLR Bulk Checker - Проверка номеров";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Bulk HLR lookup service to validate phone numbers, check carrier information, roaming status, and number portability.');
+      metaDescription.setAttribute('content', 'Сервис HLR проверки телефонных номеров, информации об операторе, статуса роуминга и портирования.');
     }
   }, []);
   
@@ -65,6 +66,7 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [countryFilter, setCountryFilter] = useState<string>("all");
   const [operatorFilter, setOperatorFilter] = useState<string>("all");
+  const [healthFilter, setHealthFilter] = useState<string>("all");
   
   // Sorting
   const [sortField, setSortField] = useState<SortField>("phoneNumber");
@@ -122,7 +124,7 @@ export default function Home() {
       });
       
       setPhoneInput(numbers.join("\n"));
-      toast.success(`Loaded ${numbers.length} phone numbers from file`);
+      toast.success(`Загружено ${numbers.length} номеров из файла`);
     };
     reader.readAsText(file);
   };
@@ -131,14 +133,11 @@ export default function Home() {
   const handleStartCheck = async () => {
     const numbers = parsePhoneNumbers(phoneInput);
     if (numbers.length === 0) {
-      toast.error("Please enter at least one phone number");
+      toast.error("Введите хотя бы один номер телефона");
       return;
     }
 
-    if (numbers.length > 1000) {
-      toast.error("Maximum 1000 numbers per batch");
-      return;
-    }
+    // No limit on number of phones
 
     setIsProcessing(true);
     try {
@@ -152,9 +151,9 @@ export default function Home() {
       setBatchName("");
       batchesQuery.refetch();
       resultsQuery.refetch();
-      toast.success(`Processed ${result.totalProcessed} numbers`);
+      toast.success(`Обработано ${result.totalProcessed} номеров`);
     } catch (error) {
-      toast.error("Failed to process numbers");
+      toast.error("Не удалось обработать номера");
     } finally {
       setIsProcessing(false);
     }
@@ -163,23 +162,24 @@ export default function Home() {
   // Export results to CSV
   const handleExportCSV = () => {
     if (!resultsData || resultsData.length === 0) {
-      toast.error("No results to export");
+      toast.error("Нет результатов для экспорта");
       return;
     }
 
     const headers = [
-      "Phone Number",
-      "International Format",
-      "Valid",
-      "Reachable",
-      "Country",
-      "Country Code",
-      "Current Operator",
-      "Network Type",
-      "Original Operator",
-      "Ported",
-      "Roaming",
-      "Status"
+      "Номер телефона",
+      "Международный формат",
+      "Валидность",
+      "Достижимость",
+      "Страна",
+      "Код страны",
+      "Текущий оператор",
+      "Тип сети",
+      "Оригинальный оператор",
+      "Портирован",
+      "Роуминг",
+      "Статус",
+      "Оценка качества"
     ];
 
     const rows = resultsData.map(r => [
@@ -194,7 +194,8 @@ export default function Home() {
       r.originalCarrierName || "",
       r.ported || "",
       r.roaming || "",
-      r.status
+      r.status,
+      r.healthScore?.toString() || ""
     ]);
 
     const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
@@ -205,7 +206,7 @@ export default function Home() {
     a.download = `hlr-results-${currentBatchId}-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Results exported successfully");
+    toast.success("Результаты успешно экспортированы");
   };
 
   // Get unique values for filters
@@ -234,6 +235,16 @@ export default function Home() {
     if (operatorFilter !== "all") {
       filtered = filtered.filter(r => r.currentCarrierName === operatorFilter);
     }
+    // Health Score filter
+    if (healthFilter !== "all") {
+      filtered = filtered.filter(r => {
+        const score = r.healthScore || 0;
+        if (healthFilter === "high") return score >= 80;
+        if (healthFilter === "normal") return score >= 50 && score < 80;
+        if (healthFilter === "low") return score < 50;
+        return true;
+      });
+    }
     
     // Apply sorting
     filtered.sort((a, b) => {
@@ -244,7 +255,7 @@ export default function Home() {
     });
     
     return filtered;
-  }, [resultsData, statusFilter, countryFilter, operatorFilter, sortField, sortDirection]);
+  }, [resultsData, statusFilter, countryFilter, operatorFilter, healthFilter, sortField, sortDirection]);
 
   // Toggle sort
   const toggleSort = (field: SortField) => {
@@ -260,11 +271,11 @@ export default function Home() {
   const getStatusBadge = (validNumber: string | null) => {
     switch (validNumber) {
       case "valid":
-        return <Badge className="bg-success text-success-foreground"><CheckCircle2 className="w-3 h-3 mr-1" />Valid</Badge>;
+        return <Badge className="bg-success text-success-foreground"><CheckCircle2 className="w-3 h-3 mr-1" />{t.home.statusValid}</Badge>;
       case "invalid":
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Invalid</Badge>;
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />{t.home.statusInvalid}</Badge>;
       default:
-        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />Unknown</Badge>;
+        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />{t.home.statusUnknown}</Badge>;
     }
   };
 
@@ -275,10 +286,10 @@ export default function Home() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">HLR Bulk Checker</h1>
-          <h2 className="sr-only">Bulk Phone Number Validation Service</h2>
+          <h1 className="text-3xl font-bold tracking-tight">{t.home.title}</h1>
+          <h2 className="sr-only">Сервис проверки телефонных номеров</h2>
           <p className="text-muted-foreground">
-            Verify phone numbers in bulk using Seven.io HLR lookup
+            {t.home.subtitle}
           </p>
         </div>
 
@@ -289,7 +300,7 @@ export default function Home() {
               <Wallet className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">API Balance</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.home.apiBalance}</p>
               <p className="text-xl font-semibold">
                 {balanceQuery.isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -306,10 +317,10 @@ export default function Home() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
-              Quick Check
+              {t.home.quickCheck}
             </CardTitle>
             <CardDescription>
-              Check a single phone number instantly
+              {t.home.quickCheckDesc}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -323,7 +334,7 @@ export default function Home() {
               <Button
                 onClick={async () => {
                   if (!singlePhone.trim()) {
-                    toast.error("Enter a phone number");
+                    toast.error("Введите номер телефона");
                     return;
                   }
                   setIsSingleChecking(true);
@@ -331,12 +342,12 @@ export default function Home() {
                     const result = await singleCheckMutation.mutateAsync({ phoneNumber: singlePhone.trim() });
                     setSingleResult(result);
                     if (result.success) {
-                      toast.success("Number checked successfully");
+                      toast.success("Номер успешно проверен");
                     } else {
-                      toast.error(result.error || "Check failed");
+                      toast.error(result.error || "Ошибка проверки");
                     }
                   } catch (error: any) {
-                    toast.error(error.message || "Failed to check number");
+                    toast.error(error.message || "Не удалось проверить номер");
                   } finally {
                     setIsSingleChecking(false);
                   }
@@ -350,17 +361,17 @@ export default function Home() {
             {singleResult && (
               <div className="mt-4 p-4 rounded-lg border bg-muted/50">
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">Number:</span> {singleResult.phoneNumber}</div>
-                  <div><span className="text-muted-foreground">Status:</span> {singleResult.isValid ? <Badge className="bg-success">Valid</Badge> : <Badge variant="destructive">Invalid</Badge>}</div>
-                  {singleResult.internationalFormat && <div><span className="text-muted-foreground">International:</span> {singleResult.internationalFormat}</div>}
-                  {singleResult.countryName && <div><span className="text-muted-foreground">Country:</span> {singleResult.countryName}</div>}
-                  {singleResult.currentCarrier && <div><span className="text-muted-foreground">Carrier:</span> {singleResult.currentCarrier}</div>}
-                  {singleResult.networkType && <div><span className="text-muted-foreground">Network:</span> {singleResult.networkType}</div>}
-                  <div><span className="text-muted-foreground">Roaming:</span> {singleResult.isRoaming ? "Yes" : "No"}</div>
-                  <div><span className="text-muted-foreground">Ported:</span> {singleResult.isPorted ? "Yes" : "No"}</div>
+                  <div><span className="text-muted-foreground">{t.home.phoneNumber}:</span> {singleResult.phoneNumber}</div>
+                  <div><span className="text-muted-foreground">{t.home.status}:</span> {singleResult.isValid ? <Badge className="bg-success">{t.home.statusValid}</Badge> : <Badge variant="destructive">{t.home.statusInvalid}</Badge>}</div>
+                  {singleResult.internationalFormat && <div><span className="text-muted-foreground">{t.home.international}:</span> {singleResult.internationalFormat}</div>}
+                  {singleResult.countryName && <div><span className="text-muted-foreground">{t.home.country}:</span> {singleResult.countryName}</div>}
+                  {singleResult.currentCarrier && <div><span className="text-muted-foreground">{t.home.carrier}:</span> {singleResult.currentCarrier}</div>}
+                  {singleResult.networkType && <div><span className="text-muted-foreground">{t.home.network}:</span> {singleResult.networkType}</div>}
+                  <div><span className="text-muted-foreground">{t.home.roaming}:</span> {singleResult.isRoaming ? t.yes : t.no}</div>
+                  <div><span className="text-muted-foreground">{t.home.ported}:</span> {singleResult.isPorted ? t.yes : t.no}</div>
                   {singleResult.healthScore !== undefined && (
                     <div className="col-span-2 mt-2 pt-2 border-t">
-                      <span className="text-muted-foreground mr-2">Health Score:</span>
+                      <span className="text-muted-foreground mr-2">{t.home.healthScore}:</span>
                       <HealthScoreBadge score={singleResult.healthScore} showLabel />
                     </div>
                   )}
@@ -377,18 +388,18 @@ export default function Home() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Phone className="h-5 w-5" />
-                Phone Numbers
+                {t.home.phoneNumbers}
               </CardTitle>
               <CardDescription>
-                Enter phone numbers separated by comma or newline, or upload a CSV file
+                {t.home.phoneNumbersDesc}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="batchName">Batch Name (optional)</Label>
+                <Label htmlFor="batchName">{t.home.batchName}</Label>
                 <Input
                   id="batchName"
-                  placeholder="e.g., Campaign Q1 2026"
+                  placeholder={t.home.batchNamePlaceholder}
                   value={batchName}
                   onChange={(e) => setBatchName(e.target.value)}
                 />
@@ -396,12 +407,12 @@ export default function Home() {
 
               <Tabs defaultValue="text" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="text">Text Input</TabsTrigger>
-                  <TabsTrigger value="file">File Upload</TabsTrigger>
+                  <TabsTrigger value="text">{t.home.textInput}</TabsTrigger>
+                  <TabsTrigger value="file">{t.home.fileUpload}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="text" className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="phones">Phone Numbers</Label>
+                    <Label htmlFor="phones">{t.home.phoneNumbers}</Label>
                     <Textarea
                       id="phones"
                       placeholder="+49176123456&#10;+44789012345&#10;+33612345678"
@@ -410,7 +421,7 @@ export default function Home() {
                       onChange={(e) => setPhoneInput(e.target.value)}
                     />
                     <p className="text-xs text-muted-foreground">
-                      {phoneCount} number{phoneCount !== 1 ? "s" : ""} detected
+                      {phoneCount} {t.home.numbersDetected}
                     </p>
                   </div>
                 </TabsContent>
@@ -418,8 +429,8 @@ export default function Home() {
                   <div className="border-2 border-dashed rounded-lg p-8 text-center">
                     <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
                     <Label htmlFor="file-upload" className="cursor-pointer">
-                      <span className="text-primary hover:underline">Click to upload</span>
-                      <span className="text-muted-foreground"> or drag and drop</span>
+                      <span className="text-primary hover:underline">{t.home.clickToUpload}</span>
+                      <span className="text-muted-foreground"> {t.home.orDragDrop}</span>
                     </Label>
                     <Input
                       id="file-upload"
@@ -429,12 +440,12 @@ export default function Home() {
                       onChange={handleFileUpload}
                     />
                     <p className="text-xs text-muted-foreground mt-2">
-                      CSV or TXT file with phone numbers
+                      {t.home.csvOrTxt}
                     </p>
                   </div>
                   {phoneInput && (
                     <p className="text-sm text-muted-foreground">
-                      {phoneCount} numbers loaded from file
+                      {phoneCount} {t.home.numbersLoaded}
                     </p>
                   )}
                 </TabsContent>
@@ -448,7 +459,7 @@ export default function Home() {
                     const nums = parsePhoneNumbers(phoneInput);
                     const unique = Array.from(new Set(nums));
                     setPhoneInput(unique.join("\n"));
-                    toast.success("Duplicates removed");
+                    toast.success(t.cost.duplicatesRemoved);
                   }}
                 />
               )}
@@ -462,12 +473,12 @@ export default function Home() {
                 {isProcessing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
+                    {t.home.processing}
                   </>
                 ) : (
                   <>
                     <Search className="mr-2 h-4 w-4" />
-                    Check {phoneCount} Number{phoneCount !== 1 ? "s" : ""}
+                    {t.home.checkNumbers} {phoneCount}
                   </>
                 )}
               </Button>
@@ -477,9 +488,9 @@ export default function Home() {
           {/* History Section */}
           <Card>
             <CardHeader>
-              <CardTitle>Check History</CardTitle>
+              <CardTitle>{t.home.checkHistory}</CardTitle>
               <CardDescription>
-                View and manage your previous HLR checks
+                {t.home.checkHistoryDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -490,8 +501,8 @@ export default function Home() {
               ) : batchesQuery.data?.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No checks yet</p>
-                  <p className="text-sm">Start by entering phone numbers above</p>
+                  <p>{t.home.noChecksYet}</p>
+                  <p className="text-sm">{t.home.startByEntering}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -505,7 +516,7 @@ export default function Home() {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium">{batch.name || `Batch #${batch.id}`}</p>
+                          <p className="font-medium">{batch.name || `Проверка #${batch.id}`}</p>
                           <p className="text-sm text-muted-foreground">
                             {new Date(batch.createdAt).toLocaleString()}
                           </p>
@@ -517,7 +528,7 @@ export default function Home() {
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">
-                            {batch.validNumbers}/{batch.totalNumbers} valid
+                            {batch.validNumbers}/{batch.totalNumbers} {t.home.valid}
                           </p>
                         </div>
                       </div>
@@ -541,20 +552,20 @@ export default function Home() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle>Results</CardTitle>
+                  <CardTitle>{t.home.results}</CardTitle>
                   <CardDescription>
-                    {filteredResults.length} of {resultsQuery.data?.total || resultsData.length} results
+                    {filteredResults.length} {t.home.resultsOf} {resultsQuery.data?.total || resultsData.length}
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   <ExportTemplatesDialog onSelectTemplate={(fields) => {
                     // Store selected fields for export
                     console.log("Selected fields:", fields);
-                    toast.info(`Template with ${fields.length} fields selected`);
+                    toast.info(`Шаблон с ${fields.length} полями выбран`);
                   }} />
                   <Button variant="outline" size="sm" onClick={handleExportCSV}>
                     <Download className="h-4 w-4 mr-2" />
-                    Export CSV
+                    {t.home.exportCSV}
                   </Button>
                 </div>
               </div>
@@ -565,22 +576,22 @@ export default function Home() {
                   <Filter className="h-4 w-4 text-muted-foreground" />
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[140px]">
-                      <SelectValue placeholder="Status" />
+                      <SelectValue placeholder={t.home.status} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="valid">Valid</SelectItem>
-                      <SelectItem value="invalid">Invalid</SelectItem>
+                      <SelectItem value="all">{t.home.allStatus}</SelectItem>
+                      <SelectItem value="valid">{t.home.statusValid}</SelectItem>
+                      <SelectItem value="invalid">{t.home.statusInvalid}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <Select value={countryFilter} onValueChange={setCountryFilter}>
                   <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Country" />
+                    <SelectValue placeholder={t.home.country} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Countries</SelectItem>
+                    <SelectItem value="all">{t.home.allCountries}</SelectItem>
                     {filterOptions.countries.map((country) => (
                       <SelectItem key={country} value={country!}>{country}</SelectItem>
                     ))}
@@ -589,13 +600,25 @@ export default function Home() {
 
                 <Select value={operatorFilter} onValueChange={setOperatorFilter}>
                   <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Operator" />
+                    <SelectValue placeholder={t.home.operator} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Operators</SelectItem>
+                    <SelectItem value="all">{t.home.allOperators}</SelectItem>
                     {filterOptions.operators.map((op) => (
                       <SelectItem key={op} value={op!}>{op}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={healthFilter} onValueChange={setHealthFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder={t.home.health} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все оценки</SelectItem>
+                    <SelectItem value="high">Высокая (80+)</SelectItem>
+                    <SelectItem value="normal">Нормальная (50-79)</SelectItem>
+                    <SelectItem value="low">Низкая (&lt;50)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -615,7 +638,7 @@ export default function Home() {
                           onClick={() => toggleSort("phoneNumber")}
                         >
                           <div className="flex items-center gap-1">
-                            Phone Number
+                            {t.home.phoneNumber}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -624,7 +647,7 @@ export default function Home() {
                           onClick={() => toggleSort("validNumber")}
                         >
                           <div className="flex items-center gap-1">
-                            Status
+                            {t.home.status}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -633,7 +656,7 @@ export default function Home() {
                           onClick={() => toggleSort("currentCarrierName")}
                         >
                           <div className="flex items-center gap-1">
-                            Operator
+                            {t.home.operator}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -642,7 +665,7 @@ export default function Home() {
                           onClick={() => toggleSort("countryName")}
                         >
                           <div className="flex items-center gap-1">
-                            Country
+                            {t.home.country}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -651,7 +674,7 @@ export default function Home() {
                           onClick={() => toggleSort("roaming")}
                         >
                           <div className="flex items-center gap-1">
-                            Roaming
+                            {t.home.roaming}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -660,7 +683,7 @@ export default function Home() {
                           onClick={() => toggleSort("ported")}
                         >
                           <div className="flex items-center gap-1">
-                            Ported
+                            {t.home.ported}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -669,7 +692,7 @@ export default function Home() {
                           onClick={() => toggleSort("healthScore")}
                         >
                           <div className="flex items-center gap-1">
-                            Health
+                            {t.home.health}
                             <ArrowUpDown className="h-3 w-3" />
                           </div>
                         </TableHead>
@@ -679,7 +702,7 @@ export default function Home() {
                       {filteredResults.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            No results match your filters
+                            {t.home.noResultsMatch}
                           </TableCell>
                         </TableRow>
                       ) : (
