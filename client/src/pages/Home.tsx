@@ -42,12 +42,13 @@ import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
-import t from "@/lib/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
 
 export default function Home() {
+  const { t } = useLanguage();
   const [phoneInput, setPhoneInput] = useState("");
   const [batchName, setBatchName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);

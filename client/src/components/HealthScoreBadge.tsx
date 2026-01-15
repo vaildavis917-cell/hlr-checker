@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Heart, HeartCrack, HeartPulse } from "lucide-react";
-import t from "@/lib/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface HealthScoreBadgeProps {
   score: number;
@@ -10,6 +10,8 @@ interface HealthScoreBadgeProps {
 }
 
 export default function HealthScoreBadge({ score, showLabel = false, size = "md" }: HealthScoreBadgeProps) {
+  const { t } = useLanguage();
+  
   const getScoreColor = (score: number) => {
     if (score >= 80) return "bg-green-100 text-green-700 border-green-300";
     if (score >= 60) return "bg-lime-100 text-lime-700 border-lime-300";

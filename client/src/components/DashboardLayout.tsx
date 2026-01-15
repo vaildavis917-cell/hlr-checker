@@ -21,19 +21,21 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, History, ShieldCheck, Sun, Moon, User, BarChart3, ClipboardList } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, History, ShieldCheck, Sun, Moon, User, BarChart3, ClipboardList, Globe } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Language, languageNames, languageFlags } from "@/lib/i18n";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
-const menuItems: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; path: string; adminOnly?: boolean }> = [
-  { icon: LayoutDashboard, label: "HLR Checker", path: "/" },
-  { icon: History, label: "History", path: "/history" },
-  { icon: BarChart3, label: "Statistics", path: "/statistics" },
-  { icon: ShieldCheck, label: "Admin", path: "/admin", adminOnly: true },
-  { icon: ClipboardList, label: "All History", path: "/admin/history", adminOnly: true },
+const getMenuItems = (t: ReturnType<typeof useLanguage>["t"]) => [
+  { icon: LayoutDashboard, label: t.nav.hlrChecker, path: "/" },
+  { icon: History, label: t.nav.history, path: "/history" },
+  { icon: BarChart3, label: t.nav.statistics, path: "/statistics" },
+  { icon: ShieldCheck, label: t.nav.admin, path: "/admin", adminOnly: true },
+  { icon: ClipboardList, label: t.nav.allHistory, path: "/admin/history", adminOnly: true },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -92,13 +94,16 @@ function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const menuItems = getMenuItems(t);
   const activeMenuItem = menuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
+  const languages: Language[] = ["ru", "uk", "en"];
 
   useEffect(() => {
     if (isCollapsed) {
@@ -219,12 +224,32 @@ function DashboardLayoutContent({
                   )}
                   <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
                 </DropdownMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Globe className="mr-2 h-4 w-4" />
+                      <span>{languageFlags[language]} {languageNames[language]}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="right" align="start">
+                    {languages.map((lang) => (
+                      <DropdownMenuItem
+                        key={lang}
+                        onClick={() => setLanguage(lang)}
+                        className={language === lang ? "bg-accent" : ""}
+                      >
+                        <span className="mr-2">{languageFlags[lang]}</span>
+                        {languageNames[lang]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>{t.auth.signOut}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

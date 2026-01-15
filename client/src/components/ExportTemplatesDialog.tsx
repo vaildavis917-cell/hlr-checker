@@ -16,13 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Settings2, Plus, Trash2, Star, Loader2 } from "lucide-react";
-import t from "@/lib/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ExportTemplatesDialogProps {
   onSelectTemplate: (fields: string[]) => void;
 }
 
 export default function ExportTemplatesDialog({ onSelectTemplate }: ExportTemplatesDialogProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [selectedFields, setSelectedFields] = useState<string[]>([]);

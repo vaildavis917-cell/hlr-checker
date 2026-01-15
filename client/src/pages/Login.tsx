@@ -8,9 +8,11 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Loader2, Eye, EyeOff, Phone, Lock, User } from "lucide-react";
 import { toast } from "sonner";
-import t from "@/lib/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 export default function Login() {
+  const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const { user, loading: authLoading, refresh } = useAuth();
   const [username, setUsername] = useState("");
@@ -104,7 +106,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/30 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/30 p-4 relative">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">

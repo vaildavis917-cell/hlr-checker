@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Calculator, AlertTriangle, Copy, CheckCircle2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import t from "@/lib/i18n";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CostCalculatorProps {
   phoneNumbers: string[];
@@ -11,6 +11,7 @@ interface CostCalculatorProps {
 }
 
 export default function CostCalculator({ phoneNumbers, onRemoveDuplicates }: CostCalculatorProps) {
+  const { t } = useLanguage();
   const analyzeQuery = trpc.hlr.analyzeNumbers.useMutation();
 
   // Analyze numbers when they change

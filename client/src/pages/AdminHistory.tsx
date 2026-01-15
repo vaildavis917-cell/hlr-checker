@@ -44,11 +44,13 @@ import {
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortField = "createdAt" | "userName" | "totalNumbers" | "validNumbers";
 type SortDirection = "asc" | "desc";
 
 export default function AdminHistory() {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");

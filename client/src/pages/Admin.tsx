@@ -58,6 +58,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type User = {
   id: number;
@@ -77,6 +78,7 @@ type User = {
 };
 
 export default function Admin() {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
