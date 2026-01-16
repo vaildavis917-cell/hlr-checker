@@ -733,3 +733,15 @@ export async function getIncompleteBatches(userId: number): Promise<HlrBatch[]> 
     ))
     .orderBy(desc(hlrBatches.createdAt));
 }
+
+// Get all phone numbers from a batch (both checked and unchecked)
+export async function getAllPhoneNumbersInBatch(batchId: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const results = await db.select({ phoneNumber: hlrResults.phoneNumber })
+    .from(hlrResults)
+    .where(eq(hlrResults.batchId, batchId));
+  
+  return results.map(r => r.phoneNumber);
+}

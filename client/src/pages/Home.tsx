@@ -81,6 +81,7 @@ export default function Home() {
   const [singlePhone, setSinglePhone] = useState("");
   const [singleResult, setSingleResult] = useState<any>(null);
   const [isSingleChecking, setIsSingleChecking] = useState(false);
+  const [resumingBatchId, setResumingBatchId] = useState<number | null>(null);
   const singleCheckMutation = trpc.hlr.checkSingle.useMutation();
   
   // API queries
@@ -159,6 +160,33 @@ export default function Home() {
       toast.error("Не удалось обработать номера");
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Resume interrupted batch
+  const handleResumeBatch = async (batchId: number) => {
+    setResumingBatchId(batchId);
+    try {
+      const result = await resumeBatchMutation.mutateAsync({ batchId });
+      
+      setCurrentBatchId(batchId);
+      batchesQuery.refetch();
+      incompleteBatchesQuery.refetch();
+      resultsQuery.refetch();
+      
+      if (!result.resumed) {
+        toast.info(t.home.batchAlreadyComplete || "Проверка уже завершена");
+      } else {
+        const processed = result.newlyChecked || 0;
+        toast.success(
+          `${t.home.resumeSuccessPrefix || "Проверка возобновлена. Обработано:"} ${processed}`
+        );
+      }
+    } catch (error: any) {
+      const message = error?.message || t.home.resumeErrorMsg || "Не удалось возобновить проверку";
+      toast.error(message);
+    } finally {
+      setResumingBatchId(null);
     }
   };
 
@@ -369,23 +397,40 @@ export default function Home() {
                 </p>
                 <div className="mt-3 space-y-2">
                   {incompleteBatchesQuery.data.map((batch) => (
-                    <div key={batch.id} className="flex items-center justify-between bg-white dark:bg-gray-800 p-2 rounded border">
+                    <div key={batch.id} className="flex items-center justify-between bg-white dark:bg-gray-800 p-3 rounded border">
                       <div>
-                        <span className="font-medium">{batch.name}</span>
+                        <span className="font-medium">{batch.name || `Проверка #${batch.id}`}</span>
                         <span className="text-sm text-muted-foreground ml-2">
                           ({batch.processedNumbers || 0}/{batch.totalNumbers} {t.home.processed || "обработано"})
                         </span>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setCurrentBatchId(batch.id);
-                          toast.info(t.home.viewingIncomplete || "Просмотр сохраненных результатов");
-                        }}
-                      >
-                        {t.view || "Просмотр"}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setCurrentBatchId(batch.id);
+                            toast.info(t.home.viewingIncomplete || "Просмотр сохраненных результатов");
+                          }}
+                        >
+                          {t.view || "Просмотр"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          disabled={resumingBatchId === batch.id}
+                          onClick={() => handleResumeBatch(batch.id)}
+                        >
+                          {resumingBatchId === batch.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              {t.home.resuming || "Возобновление..."}
+                            </>
+                          ) : (
+                            t.home.resume || "Возобновить"
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

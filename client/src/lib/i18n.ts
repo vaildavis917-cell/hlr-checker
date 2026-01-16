@@ -133,6 +133,11 @@ const translations = {
       incompleteBatchesDesc: "Некоторые проверки были прерваны. Результаты сохранены, но проверка не завершена.",
       processed: "обработано",
       viewingIncomplete: "Просмотр сохраненных результатов",
+      resume: "Возобновить",
+      resuming: "Возобновление...",
+      batchAlreadyComplete: "Проверка уже завершена",
+      resumeSuccessPrefix: "Проверка возобновлена. Обработано:",
+      resumeErrorMsg: "Не удалось возобновить проверку",
     },
     
     // Cost calculator
@@ -464,6 +469,11 @@ const translations = {
       incompleteBatchesDesc: "Деякі перевірки були перервані. Результати збережено, але перевірка не завершена.",
       processed: "оброблено",
       viewingIncomplete: "Перегляд збережених результатів",
+      resume: "Відновити",
+      resuming: "Відновлення...",
+      batchAlreadyComplete: "Перевірка вже завершена",
+      resumeSuccessPrefix: "Перевірка відновлена. Оброблено:",
+      resumeErrorMsg: "Не вдалося відновити перевірку",
     },
     
     // Cost calculator
@@ -795,6 +805,11 @@ const translations = {
       incompleteBatchesDesc: "Some checks were interrupted. Results are saved, but the check is not complete.",
       processed: "processed",
       viewingIncomplete: "Viewing saved results",
+      resume: "Resume",
+      resuming: "Resuming...",
+      batchAlreadyComplete: "Check already completed",
+      resumeSuccessPrefix: "Check resumed. Processed:",
+      resumeErrorMsg: "Failed to resume check",
     },
     
     // Cost calculator
