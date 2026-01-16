@@ -130,7 +130,7 @@
 
 ## Documentation
 - [x] Create comprehensive README.md with hero block, features, quickstart
-- [ ] Add screenshots/visual materials (TODO in README)
+- [x] Add screenshots/visual materials (5 key screens added)
 - [x] Document API examples (single/batch/results)
 - [x] Add Security section with current measures and roadmap
 - [x] Add .env configuration table

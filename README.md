@@ -69,14 +69,25 @@ Health Score рассчитывается по 5 параметрам:
 
 ## Screenshots
 
-> TODO: add screenshots
+### Login Screen
+![Login Screen](client/public/screenshots/01-login-screen.png)
+*Авторизация с поддержкой трёх языков (RU/UK/EN)*
 
-Планируемые скриншоты:
-1. Home / Single check
-2. Upload batch + прогресс
-3. Results table + pagination + health score
-4. Export templates
-5. Admin panel / users / limits
+### Main Dashboard
+![Main Dashboard](client/public/screenshots/02-main-dashboard.png)
+*Интерфейс для single check и batch upload. Слева навигация, справа поле для ввода номеров и выбор языка*
+
+### Batch Processing Progress
+![Batch Progress](client/public/screenshots/03-batch-progress.png)
+*Реал-тайм прогресс проверки: 65% завершено (650/1000 номеров). Таблица результатов с Health Score, статусом, оператором*
+
+### Completed Batch Results
+![Results View](client/public/screenshots/04-results-view.png)
+*Полная таблица результатов с кнопками Export CSV и Export XLSX. Сортировка и фильтрация по всем колонкам*
+
+### Incomplete Batch Recovery
+![Incomplete Batch](client/public/screenshots/05-incomplete-batch.png)
+*Предупреждение о незавершённых батчах. Кнопка "Resume" для продолжения проверки с того же места (450/1000)*
 
 ---
 
