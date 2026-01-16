@@ -40,6 +40,7 @@ import {
   calculateBatchHealthScores,
   getAllBatches,
   getCachedResults,
+  getCachedResult,
   getCheckedPhoneNumbersInBatch,
   getIncompleteBatches,
 } from "./db";
@@ -520,13 +521,39 @@ export const appRouter = router({
     checkSingle: protectedProcedure
       .input(z.object({ phoneNumber: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
-        // Check limits
+        const normalizedPhone = input.phoneNumber.trim();
+        
+        // Check cache first (24 hours)
+        const cachedResult = await getCachedResult(normalizedPhone, 24);
+        if (cachedResult) {
+          // Return cached result without API call
+          const healthScore = calculateHealthScore(cachedResult);
+          await logAction({ userId: ctx.user.id, action: "single_check_cached", details: normalizedPhone });
+          
+          return {
+            success: true,
+            phoneNumber: normalizedPhone,
+            internationalFormat: cachedResult.internationalFormat,
+            nationalFormat: cachedResult.nationalFormat,
+            countryCode: cachedResult.countryCode,
+            countryName: cachedResult.countryName,
+            currentCarrier: cachedResult.currentCarrierName,
+            networkType: cachedResult.currentNetworkType,
+            isValid: cachedResult.validNumber === "valid",
+            isRoaming: cachedResult.roaming === "true",
+            isPorted: cachedResult.ported === "true",
+            reachable: cachedResult.reachable,
+            healthScore,
+          };
+        }
+        
+        // Check limits only if we need to call API
         const limitsCheck = await checkUserLimits(ctx.user.id, 1);
         if (!limitsCheck.allowed) {
           throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
         }
 
-        const hlrResponse = await performHlrLookup(input.phoneNumber.trim());
+        const hlrResponse = await performHlrLookup(normalizedPhone);
         
         // Increment user checks
         await incrementUserChecks(ctx.user.id, 1);
@@ -551,9 +578,45 @@ export const appRouter = router({
         };
         const healthScore = calculateHealthScore(mockResult as any);
 
+        // Save result to database for caching and history
+        // Create a single-check batch for tracking
+        const batchId = await createHlrBatch({
+          userId: ctx.user.id,
+          name: `Single: ${normalizedPhone}`,
+          totalNumbers: 1,
+          processedNumbers: 1,
+          validNumbers: hlrResponse.valid_number === "valid" ? 1 : 0,
+          invalidNumbers: hlrResponse.valid_number === "valid" ? 0 : 1,
+          status: "completed",
+        });
+        
+        await createHlrResult({
+          batchId,
+          phoneNumber: normalizedPhone,
+          internationalFormat: hlrResponse.international_format_number,
+          nationalFormat: hlrResponse.national_format_number,
+          countryCode: hlrResponse.country_code,
+          countryName: hlrResponse.country_name,
+          countryPrefix: hlrResponse.country_prefix,
+          currentCarrierName: hlrResponse.current_carrier?.name,
+          currentCarrierCode: hlrResponse.current_carrier?.network_code,
+          currentCarrierCountry: hlrResponse.current_carrier?.country,
+          currentNetworkType: hlrResponse.current_carrier?.network_type,
+          originalCarrierName: hlrResponse.original_carrier?.name,
+          originalCarrierCode: hlrResponse.original_carrier?.network_code,
+          validNumber: hlrResponse.valid_number,
+          reachable: hlrResponse.reachable,
+          ported: hlrResponse.ported,
+          roaming: hlrResponse.roaming,
+          gsmCode: hlrResponse.gsm_code,
+          gsmMessage: hlrResponse.gsm_message,
+          status: "success",
+          rawResponse: hlrResponse,
+        });
+
         return {
           success: true,
-          phoneNumber: input.phoneNumber,
+          phoneNumber: normalizedPhone,
           internationalFormat: hlrResponse.international_format_number,
           nationalFormat: hlrResponse.national_format_number,
           countryCode: hlrResponse.country_code,

@@ -36,7 +36,8 @@ import {
   Loader2,
   Wallet,
   ArrowUpDown,
-  Filter
+  Filter,
+  BarChart3
 } from "lucide-react";
 import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
@@ -68,6 +69,7 @@ export default function Home() {
   const [countryFilter, setCountryFilter] = useState<string>("all");
   const [operatorFilter, setOperatorFilter] = useState<string>("all");
   const [healthFilter, setHealthFilter] = useState<string>("all");
+  const [exportFilter, setExportFilter] = useState<string>("all"); // all, valid, invalid
   
   // Sorting
   const [sortField, setSortField] = useState<SortField>("phoneNumber");
@@ -86,6 +88,7 @@ export default function Home() {
   
   // API queries
   const balanceQuery = trpc.hlr.getBalance.useQuery(undefined, { enabled: isAdmin });
+  const userStatsQuery = trpc.hlr.getUserStats.useQuery();
   const batchesQuery = trpc.hlr.listBatches.useQuery();
   const incompleteBatchesQuery = trpc.hlr.getIncompleteBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
@@ -197,6 +200,19 @@ export default function Home() {
       return;
     }
 
+    // Apply export filter
+    let dataToExport = resultsData;
+    if (exportFilter === "valid") {
+      dataToExport = resultsData.filter(r => r.validNumber === "valid");
+    } else if (exportFilter === "invalid") {
+      dataToExport = resultsData.filter(r => r.validNumber !== "valid");
+    }
+
+    if (dataToExport.length === 0) {
+      toast.error(t.home.noResultsToExport || "Нет результатов для экспорта");
+      return;
+    }
+
     const headers = [
       "Номер телефона",
       "Международный формат",
@@ -213,7 +229,7 @@ export default function Home() {
       "Оценка качества"
     ];
 
-    const rows = resultsData.map(r => [
+    const rows = dataToExport.map(r => [
       r.phoneNumber,
       r.internationalFormat || "",
       r.validNumber || "",
@@ -247,6 +263,19 @@ export default function Home() {
       return;
     }
 
+    // Apply export filter
+    let dataToExport = resultsData;
+    if (exportFilter === "valid") {
+      dataToExport = resultsData.filter(r => r.validNumber === "valid");
+    } else if (exportFilter === "invalid") {
+      dataToExport = resultsData.filter(r => r.validNumber !== "valid");
+    }
+
+    if (dataToExport.length === 0) {
+      toast.error(t.home.noResultsToExport || "Нет результатов для экспорта");
+      return;
+    }
+
     try {
       // Dynamically import xlsx library
       const XLSX = await import('xlsx');
@@ -267,7 +296,7 @@ export default function Home() {
         t.home.healthScore || "Оценка качества"
       ];
 
-      const rows = resultsData.map(r => ([
+      const rows = dataToExport.map(r => ([
         r.phoneNumber,
         r.internationalFormat || "",
         r.validNumber || "",
@@ -454,6 +483,47 @@ export default function Home() {
                   `${balanceQuery.data?.balance?.toFixed(2) || "0.00"} ${balanceQuery.data?.currency || "EUR"}`
                 )}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* User Limits Card */}
+        {userStatsQuery.data && (
+          <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-card">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <BarChart3 className="h-5 w-5 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {t.home.dailyUsage || "Сегодня"}
+                </p>
+                <p className="text-xl font-semibold">
+                  {userStatsQuery.data.checksToday}
+                  {userStatsQuery.data.limits.dailyLimit > 0 && (
+                    <span className="text-sm text-muted-foreground"> / {userStatsQuery.data.limits.dailyLimit}</span>
+                  )}
+                  {userStatsQuery.data.limits.dailyLimit === 0 && isAdmin && balanceQuery.data?.balance && (
+                    <span className="text-sm text-muted-foreground"> (~{Math.floor(balanceQuery.data.balance / 0.01)} {t.home.available || "доступно"})</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <BarChart3 className="h-5 w-5 text-green-500" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {t.home.monthlyUsage || "В этом месяце"}
+                </p>
+                <p className="text-xl font-semibold">
+                  {userStatsQuery.data.checksThisMonth}
+                  {userStatsQuery.data.limits.monthlyLimit > 0 && (
+                    <span className="text-sm text-muted-foreground"> / {userStatsQuery.data.limits.monthlyLimit}</span>
+                  )}
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -703,7 +773,17 @@ export default function Home() {
                     {filteredResults.length} {t.home.resultsOf} {resultsQuery.data?.total || resultsData.length}
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select value={exportFilter} onValueChange={setExportFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder={t.home.exportFilter || "Экспорт"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t.home.exportAll || "Все номера"}</SelectItem>
+                      <SelectItem value="valid">{t.home.exportValidOnly || "Только валидные"}</SelectItem>
+                      <SelectItem value="invalid">{t.home.exportInvalidOnly || "Только невалидные"}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <ExportTemplatesDialog onSelectTemplate={(fields) => {
                     // Store selected fields for export
                     console.log("Selected fields:", fields);

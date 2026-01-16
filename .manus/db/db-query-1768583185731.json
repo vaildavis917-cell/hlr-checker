@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO users (username, passwordHash, name, role, isActive) VALUES ('testuser', '$2b$10$mvYsy0Qk0lJWhQKw32yuSOAGkNYTi4bKJdGXKCW8NtNLz9wORCpJC', 'Test User', 'user', 'yes') ON DUPLICATE KEY UPDATE passwordHash = '$2b$10$mvYsy0Qk0lJWhQKw32yuSOAGkNYTi4bKJdGXKCW8NtNLz9wORCpJC';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute INSERT INTO users (username, passwordHash, name, role, isActive) VALUES ('testuser', '$2b$10$mvYsy0Qk0lJWhQKw32yuSOAGkNYTi4bKJdGXKCW8NtNLz9wORCpJC', 'Test User', 'user', 'yes') ON DUPLICATE KEY UPDATE passwordHash = '$2b$10$mvYsy0Qk0lJWhQKw32yuSOAGkNYTi4bKJdGXKCW8NtNLz9wORCpJC';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 369
+}

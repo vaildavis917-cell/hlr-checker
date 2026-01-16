@@ -11,6 +11,7 @@ import AdminHistory from "./pages/AdminHistory";
 import Login from "./pages/Login";
 
 import Statistics from "./pages/Statistics";
+import Tools from "./pages/Tools";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -23,6 +24,7 @@ function Router() {
       <Route path={"/admin/history"} component={AdminHistory} />
 
       <Route path={"/statistics"} component={Statistics} />
+      <Route path={"/tools"} component={Tools} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

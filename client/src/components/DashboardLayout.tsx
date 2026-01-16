@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, History, ShieldCheck, Sun, Moon, User, BarChart3, ClipboardList, Globe } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, History, ShieldCheck, Sun, Moon, User, BarChart3, ClipboardList, Globe, FileText } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Language, languageNames, languageFlags } from "@/lib/i18n";
@@ -34,6 +34,7 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"]) => [
   { icon: LayoutDashboard, label: t.nav.hlrChecker, path: "/" },
   { icon: History, label: t.nav.history, path: "/history" },
   { icon: BarChart3, label: t.nav.statistics, path: "/statistics" },
+  { icon: FileText, label: t.nav.tools || "Инструменты", path: "/tools" },
   { icon: ShieldCheck, label: t.nav.admin, path: "/admin", adminOnly: true },
   { icon: ClipboardList, label: t.nav.allHistory, path: "/admin/history", adminOnly: true },
 ];

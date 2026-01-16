@@ -136,3 +136,18 @@
 - [x] Add .env configuration table
 - [x] Add Tech Stack section
 - [x] Add Roadmap section
+
+
+## Bug Fixes
+- [ ] Fix: History of single HLR lookups not being saved
+
+
+## Bug Fixes & Improvements
+- [x] Add caching for previously checked numbers to avoid duplicate API calls
+- [ ] Show cached results indicator in UI
+- [x] Fix history not being saved/displayed (single checks now save to DB)
+
+- [x] Add duplicate cleaner tab (no API, client-side only) - Tools page
+- [x] Add export filter: valid only / invalid only
+- [x] Show user limits (used/total) for users with limits
+- [x] Show estimated checks based on balance for users without limits
