@@ -126,3 +126,13 @@
 - [x] Backend API for resuming interrupted batches
 - [x] UI warning for incomplete batches
 - [x] Add "Resume" button in UI for incomplete batches
+
+
+## Documentation
+- [x] Create comprehensive README.md with hero block, features, quickstart
+- [ ] Add screenshots/visual materials (TODO in README)
+- [x] Document API examples (single/batch/results)
+- [x] Add Security section with current measures and roadmap
+- [x] Add .env configuration table
+- [x] Add Tech Stack section
+- [x] Add Roadmap section
