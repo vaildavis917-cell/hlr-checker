@@ -57,6 +57,13 @@ const translations = {
     
     // Navigation
     nav: {
+      dashboard: "Панель управления",
+      hlrLookup: "HLR Проверка",
+      batchChecker: "Массовая проверка",
+      settings: "Настройки",
+      support: "Поддержка",
+      billing: "Биллинг",
+      users: "Пользователи",
       hlrChecker: "HLR Проверка",
       history: "История",
       statistics: "Статистика",
@@ -127,6 +134,11 @@ const translations = {
       dailyUsage: "Сегодня",
       monthlyUsage: "В этом месяце",
       available: "доступно",
+      usageLimits: "Лимиты использования",
+      unlimited: "без лимита",
+      dailyLimitReached: "Дневной лимит исчерпан",
+      monthlyLimitReached: "Месячный лимит исчерпан",
+      estimatedChecks: "Примерно доступно проверок",
       noResultsToExport: "Нет результатов для экспорта",
       exportSuccess: "Результаты успешно экспортированы",
       exportError: "Ошибка при экспорте",
@@ -358,6 +370,24 @@ const translations = {
       blacklisted: "В чёрном списке",
       unknown: "Неизвестно",
     },
+    
+    settings: {
+      description: "Управление настройками аккаунта",
+      profile: "Профиль",
+      profileDesc: "Информация о вашем аккаунте",
+      username: "Имя пользователя",
+      role: "Роль",
+      language: "Язык",
+      languageDesc: "Выберите предпочтительный язык",
+      about: "О приложении",
+    },
+    
+    statistics: {
+      totalChecked: "Всего проверено",
+      validNumbers: "Валидных",
+      invalidNumbers: "Невалидных",
+      checksUsed: "проверок",
+    },
   },
   
   uk: {
@@ -401,6 +431,13 @@ const translations = {
     
     // Navigation
     nav: {
+      dashboard: "Панель керування",
+      hlrLookup: "HLR Перевірка",
+      batchChecker: "Масова перевірка",
+      settings: "Налаштування",
+      support: "Підтримка",
+      billing: "Білінг",
+      users: "Користувачі",
       hlrChecker: "HLR Перевірка",
       history: "Історія",
       statistics: "Статистика",
@@ -471,6 +508,11 @@ const translations = {
       dailyUsage: "Сьогодні",
       monthlyUsage: "Цього місяця",
       available: "доступно",
+      usageLimits: "Ліміти використання",
+      unlimited: "без ліміту",
+      dailyLimitReached: "Денний ліміт вичерпано",
+      monthlyLimitReached: "Місячний ліміт вичерпано",
+      estimatedChecks: "Приблизно доступно перевірок",
       noResultsToExport: "Немає результатів для експорту",
       exportSuccess: "Результати успішно експортовано",
       exportError: "Помилка при експорті",
@@ -702,6 +744,24 @@ const translations = {
       blacklisted: "У чорному списку",
       unknown: "Невідомо",
     },
+    
+    settings: {
+      description: "Управління налаштуваннями акаунту",
+      profile: "Профіль",
+      profileDesc: "Інформація про ваш акаунт",
+      username: "Ім'я користувача",
+      role: "Роль",
+      language: "Мова",
+      languageDesc: "Виберіть бажану мову",
+      about: "Про додаток",
+    },
+    
+    statistics: {
+      totalChecked: "Всього перевірено",
+      validNumbers: "Валідних",
+      invalidNumbers: "Невалідних",
+      checksUsed: "перевірок",
+    },
   },
   
   en: {
@@ -745,6 +805,13 @@ const translations = {
     
     // Navigation
     nav: {
+      dashboard: "Dashboard",
+      hlrLookup: "HLR Lookup",
+      batchChecker: "Batch Checker",
+      settings: "Settings",
+      support: "Support",
+      billing: "Billing & Usage",
+      users: "Users",
       hlrChecker: "HLR Check",
       history: "History",
       statistics: "Statistics",
@@ -815,6 +882,11 @@ const translations = {
       dailyUsage: "Today",
       monthlyUsage: "This month",
       available: "available",
+      usageLimits: "Usage Limits",
+      unlimited: "unlimited",
+      dailyLimitReached: "Daily limit reached",
+      monthlyLimitReached: "Monthly limit reached",
+      estimatedChecks: "Estimated available checks",
       noResultsToExport: "No results to export",
       exportSuccess: "Results exported successfully",
       exportError: "Export error",
@@ -1045,6 +1117,24 @@ const translations = {
       bad_number: "Bad number",
       blacklisted: "Blacklisted",
       unknown: "Unknown",
+    },
+    
+    settings: {
+      description: "Manage your account settings",
+      profile: "Profile",
+      profileDesc: "Your account information",
+      username: "Username",
+      role: "Role",
+      language: "Language",
+      languageDesc: "Choose your preferred language",
+      about: "About",
+    },
+    
+    statistics: {
+      totalChecked: "Total Checked",
+      validNumbers: "Valid",
+      invalidNumbers: "Invalid",
+      checksUsed: "checks",
     },
   },
 };

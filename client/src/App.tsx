@@ -9,39 +9,39 @@ import History from "./pages/History";
 import Admin from "./pages/Admin";
 import AdminHistory from "./pages/AdminHistory";
 import Login from "./pages/Login";
-
 import Statistics from "./pages/Statistics";
 import Tools from "./pages/Tools";
+import Dashboard from "./pages/Dashboard";
+import HlrLookup from "./pages/HlrLookup";
+import SettingsPage from "./pages/Settings";
+import HelpCenter from "./pages/HelpCenter";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path={"/login"} component={Login} />
       <Route path={"/"} component={Home} />
+      <Route path={"/dashboard"} component={Dashboard} />
+      <Route path={"/lookup"} component={HlrLookup} />
+      <Route path={"/settings"} component={SettingsPage} />
       <Route path={"/history"} component={History} />
       <Route path={"/admin"} component={Admin} />
       <Route path={"/admin/history"} component={AdminHistory} />
-
+      <Route path={"/admin/billing"} component={Admin} />
       <Route path={"/statistics"} component={Statistics} />
       <Route path={"/tools"} component={Tools} />
+      <Route path={"/help"} component={HelpCenter} />
       <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider
-        defaultTheme="light"
+        defaultTheme="dark"
         switchable
       >
         <TooltipProvider>

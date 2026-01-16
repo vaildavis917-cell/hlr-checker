@@ -1,0 +1,59 @@
+{
+  "query": "SELECT id, username, name, role, isActive FROM users;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT id, username, name, role, isActive FROM users;",
+  "rows": [
+    {
+      "id": "99",
+      "username": "IghorIT",
+      "name": "IghorIT",
+      "role": "admin",
+      "isActive": "yes"
+    },
+    {
+      "id": "100",
+      "username": "EvaCRM",
+      "name": "EvaCRM",
+      "role": "user",
+      "isActive": "yes"
+    },
+    {
+      "id": "101",
+      "username": "EvaCRMX",
+      "name": "NULL",
+      "role": "user",
+      "isActive": "yes"
+    },
+    {
+      "id": "106",
+      "username": "Nic",
+      "name": "Nicole",
+      "role": "admin",
+      "isActive": "yes"
+    },
+    {
+      "id": "180001",
+      "username": "MaxX",
+      "name": "MaxX",
+      "role": "user",
+      "isActive": "yes"
+    },
+    {
+      "id": "210001",
+      "username": "testuser",
+      "name": "Test User",
+      "role": "admin",
+      "isActive": "yes"
+    },
+    {
+      "id": "210002",
+      "username": "testuser1768584084048",
+      "name": "New User",
+      "role": "user",
+      "isActive": "yes"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\tname\trole\tisActive\n99\tIghorIT\tIghorIT\tadmin\tyes\n100\tEvaCRM\tEvaCRM\tuser\tyes\n101\tEvaCRMX\tNULL\tuser\tyes\n106\tNic\tNicole\tadmin\tyes\n180001\tMaxX\tMaxX\tuser\tyes\n210001\ttestuser\tTest User\tadmin\tyes\n210002\ttestuser1768584084048\tNew User\tuser\tyes\n",
+  "stderr": "",
+  "execution_time_ms": 346
+}

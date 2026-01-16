@@ -151,3 +151,30 @@
 - [x] Add export filter: valid only / invalid only
 - [x] Show user limits (used/total) for users with limits
 - [x] Show estimated checks based on balance for users without limits
+
+- [x] Add file upload to Tools page for duplicate cleaning
+
+- [ ] Add visual progress bar for user limits (used/available)
+- [ ] Show warning message when limit is exhausted
+
+- [ ] Add visual progress bar for user limits (used/available)
+- [ ] Show warning message when limit is exhausted
+
+
+## UI Redesign
+- [ ] Redesign sidebar navigation (Dashboard, HLR Lookup, Batch Checker, Settings, Support)
+- [ ] Add Support link to Telegram (https://t.me/toskaqwe1)
+- [ ] Create Dashboard page with limits, usage stats, account info
+- [ ] Create HLR Lookup page (single check)
+- [ ] Create Batch Checker page (bulk check with completed batches table)
+- [ ] Move Billing & Usage to admin-only section
+- [ ] Add API Key display and Language selector to header
+- [ ] Add Help Center link to header
+
+## Help Center
+- [x] Create Help Center page with full HLR guide
+- [x] Add HLR response codes explanation (GSM codes, status meanings)
+- [x] Add service features documentation
+- [x] Add translations for Help Center (RU/UK/EN)
+- [x] Link Help Center button in header to the page
+- [x] Add FAQ/Troubleshooting section with self-help solutions

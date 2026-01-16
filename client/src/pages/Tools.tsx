@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Download, Trash2, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Copy, Download, Trash2, FileText, CheckCircle, XCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 // Translations for Tools page
@@ -32,6 +33,12 @@ const translations = {
     statsOutput: "Уникальных",
     statsDuplicates: "Дублей",
     statsInvalid: "Невалидных",
+    textInput: "Текстовый ввод",
+    fileUpload: "Загрузка файла",
+    dropFileHere: "Перетащите файл сюда или нажмите для выбора",
+    supportedFormats: "Поддерживаемые форматы: TXT, CSV",
+    fileLoaded: (name: string, count: number) => `Файл "${name}" загружен: ${count} номеров`,
+    fileError: "Ошибка чтения файла",
   },
   uk: {
     title: "Інструменти",
@@ -56,6 +63,12 @@ const translations = {
     statsOutput: "Унікальних",
     statsDuplicates: "Дублів",
     statsInvalid: "Невалідних",
+    textInput: "Текстовий ввід",
+    fileUpload: "Завантаження файлу",
+    dropFileHere: "Перетягніть файл сюди або натисніть для вибору",
+    supportedFormats: "Підтримувані формати: TXT, CSV",
+    fileLoaded: (name: string, count: number) => `Файл "${name}" завантажено: ${count} номерів`,
+    fileError: "Помилка читання файлу",
   },
   en: {
     title: "Tools",
@@ -80,6 +93,12 @@ const translations = {
     statsOutput: "Unique",
     statsDuplicates: "Duplicates",
     statsInvalid: "Invalid",
+    textInput: "Text Input",
+    fileUpload: "File Upload",
+    dropFileHere: "Drop file here or click to select",
+    supportedFormats: "Supported formats: TXT, CSV",
+    fileLoaded: (name: string, count: number) => `File "${name}" loaded: ${count} numbers`,
+    fileError: "Error reading file",
   },
 };
 
@@ -94,6 +113,8 @@ export default function Tools() {
   const [processedNumbers, setProcessedNumbers] = useState<string[]>([]);
   const [duplicatesRemoved, setDuplicatesRemoved] = useState(0);
   const [invalidRemoved, setInvalidRemoved] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Normalize phone number
   const normalizePhone = (phone: string): string => {
@@ -140,6 +161,68 @@ export default function Tools() {
     setInvalidRemoved(invalid);
     
     toast.success(t.processSuccess(valid.length, dupes, invalid));
+  };
+
+  // Handle file upload
+  const handleFileUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (content) {
+        // Parse CSV or TXT
+        let numbers: string[] = [];
+        if (file.name.endsWith('.csv')) {
+          // Skip header row if exists, extract first column
+          const lines = content.split('\n');
+          numbers = lines.slice(1).map(line => {
+            const firstCol = line.split(',')[0] || line.split(';')[0];
+            return firstCol.replace(/"/g, '').trim();
+          }).filter(Boolean);
+          
+          // If first line looks like a phone number, include it
+          if (lines[0] && /^\+?\d/.test(lines[0].split(',')[0].replace(/"/g, '').trim())) {
+            numbers.unshift(lines[0].split(',')[0].replace(/"/g, '').trim());
+          }
+        } else {
+          numbers = content.split(/[\n,;]+/).map(l => l.trim()).filter(Boolean);
+        }
+        
+        setInputNumbers(numbers.join('\n'));
+        toast.success(t.fileLoaded(file.name, numbers.length));
+      }
+    };
+    reader.onerror = () => {
+      toast.error(t.fileError);
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle file input change
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  // Handle drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && (file.name.endsWith('.txt') || file.name.endsWith('.csv'))) {
+      handleFileUpload(file);
+    }
   };
 
   // Copy to clipboard
@@ -205,12 +288,54 @@ export default function Tools() {
               <CardDescription>{t.inputDescription}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                value={inputNumbers}
-                onChange={(e) => setInputNumbers(e.target.value)}
-                placeholder={t.inputPlaceholder}
-                className="min-h-[300px] font-mono text-sm"
-              />
+              <Tabs defaultValue="text" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="text">{t.textInput}</TabsTrigger>
+                  <TabsTrigger value="file">{t.fileUpload}</TabsTrigger>
+                </TabsList>
+                <TabsContent value="text" className="mt-4">
+                  <Textarea
+                    value={inputNumbers}
+                    onChange={(e) => setInputNumbers(e.target.value)}
+                    placeholder={t.inputPlaceholder}
+                    className="min-h-[250px] font-mono text-sm"
+                  />
+                </TabsContent>
+                <TabsContent value="file" className="mt-4">
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors min-h-[250px] flex flex-col items-center justify-center ${
+                      isDragging 
+                        ? 'border-primary bg-primary/10' 
+                        : 'border-muted-foreground/25 hover:border-primary/50'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground mb-2">{t.dropFileHere}</p>
+                    <p className="text-sm text-muted-foreground/70">{t.supportedFormats}</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.csv"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {inputNumbers && (
+                    <div className="mt-4">
+                      <Textarea
+                        value={inputNumbers}
+                        onChange={(e) => setInputNumbers(e.target.value)}
+                        placeholder={t.inputPlaceholder}
+                        className="min-h-[150px] font-mono text-sm"
+                      />
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
                   {t.inputCount(stats.input)}

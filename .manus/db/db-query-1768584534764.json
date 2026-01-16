@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, username, role FROM users;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT id, username, role FROM users;",
+  "rows": [
+    {
+      "id": "99",
+      "username": "IghorIT",
+      "role": "admin"
+    },
+    {
+      "id": "100",
+      "username": "EvaCRM",
+      "role": "user"
+    },
+    {
+      "id": "101",
+      "username": "EvaCRMX",
+      "role": "user"
+    },
+    {
+      "id": "106",
+      "username": "Nic",
+      "role": "admin"
+    },
+    {
+      "id": "180001",
+      "username": "MaxX",
+      "role": "user"
+    },
+    {
+      "id": "210001",
+      "username": "testuser",
+      "role": "user"
+    },
+    {
+      "id": "210002",
+      "username": "testuser1768584084048",
+      "role": "user"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\trole\n99\tIghorIT\tadmin\n100\tEvaCRM\tuser\n101\tEvaCRMX\tuser\n106\tNic\tadmin\n180001\tMaxX\tuser\n210001\ttestuser\tuser\n210002\ttestuser1768584084048\tuser\n",
+  "stderr": "",
+  "execution_time_ms": 519
+}

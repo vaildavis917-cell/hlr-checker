@@ -487,45 +487,87 @@ export default function Home() {
           </div>
         )}
 
-        {/* User Limits Card */}
+        {/* User Limits Card with Progress Bars */}
         {userStatsQuery.data && (
-          <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-card">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-blue-500" />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BarChart3 className="h-5 w-5" />
+                {t.home.usageLimits || "Лимиты использования"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Daily Limit */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">{t.home.dailyUsage || "Сегодня"}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {userStatsQuery.data.checksToday}
+                    {userStatsQuery.data.limits.dailyLimit > 0 
+                      ? ` / ${userStatsQuery.data.limits.dailyLimit}`
+                      : ` (${t.home.unlimited || "без лимита"})`
+                    }
+                  </span>
+                </div>
+                {userStatsQuery.data.limits.dailyLimit > 0 ? (
+                  <>
+                    <Progress 
+                      value={(userStatsQuery.data.checksToday / userStatsQuery.data.limits.dailyLimit) * 100} 
+                      className={`h-2 ${userStatsQuery.data.checksToday >= userStatsQuery.data.limits.dailyLimit ? '[&>div]:bg-red-500' : ''}`}
+                    />
+                    {userStatsQuery.data.checksToday >= userStatsQuery.data.limits.dailyLimit && (
+                      <div className="flex items-center gap-2 text-red-500 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {t.home.dailyLimitReached || "Дневной лимит исчерпан"}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Progress value={0} className="h-2 [&>div]:bg-green-500" />
+                )}
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {t.home.dailyUsage || "Сегодня"}
-                </p>
-                <p className="text-xl font-semibold">
-                  {userStatsQuery.data.checksToday}
-                  {userStatsQuery.data.limits.dailyLimit > 0 && (
-                    <span className="text-sm text-muted-foreground"> / {userStatsQuery.data.limits.dailyLimit}</span>
-                  )}
-                  {userStatsQuery.data.limits.dailyLimit === 0 && isAdmin && balanceQuery.data?.balance && (
-                    <span className="text-sm text-muted-foreground"> (~{Math.floor(balanceQuery.data.balance / 0.01)} {t.home.available || "доступно"})</span>
-                  )}
-                </p>
+
+              {/* Monthly Limit */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">{t.home.monthlyUsage || "В этом месяце"}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {userStatsQuery.data.checksThisMonth}
+                    {userStatsQuery.data.limits.monthlyLimit > 0 
+                      ? ` / ${userStatsQuery.data.limits.monthlyLimit}`
+                      : ` (${t.home.unlimited || "без лимита"})`
+                    }
+                  </span>
+                </div>
+                {userStatsQuery.data.limits.monthlyLimit > 0 ? (
+                  <>
+                    <Progress 
+                      value={(userStatsQuery.data.checksThisMonth / userStatsQuery.data.limits.monthlyLimit) * 100} 
+                      className={`h-2 ${userStatsQuery.data.checksThisMonth >= userStatsQuery.data.limits.monthlyLimit ? '[&>div]:bg-red-500' : ''}`}
+                    />
+                    {userStatsQuery.data.checksThisMonth >= userStatsQuery.data.limits.monthlyLimit && (
+                      <div className="flex items-center gap-2 text-red-500 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        {t.home.monthlyLimitReached || "Месячный лимит исчерпан"}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <Progress value={0} className="h-2 [&>div]:bg-green-500" />
+                )}
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {t.home.monthlyUsage || "В этом месяце"}
-                </p>
-                <p className="text-xl font-semibold">
-                  {userStatsQuery.data.checksThisMonth}
-                  {userStatsQuery.data.limits.monthlyLimit > 0 && (
-                    <span className="text-sm text-muted-foreground"> / {userStatsQuery.data.limits.monthlyLimit}</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
+
+              {/* Estimated checks for unlimited users */}
+              {userStatsQuery.data.limits.dailyLimit === 0 && isAdmin && balanceQuery.data?.balance && (
+                <div className="pt-2 border-t">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">{t.home.estimatedChecks || "Примерно доступно проверок"}</span>
+                    <span className="font-medium text-green-500">~{Math.floor(balanceQuery.data.balance / 0.01)}</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Single Phone Check */}
