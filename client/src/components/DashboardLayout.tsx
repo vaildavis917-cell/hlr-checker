@@ -32,7 +32,8 @@ import {
   Moon, 
   Bell,
   Users,
-  CreditCard
+  CreditCard,
+  Globe
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -101,7 +102,7 @@ function DashboardLayoutContent({
 }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const [location, setLocation] = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -218,21 +219,44 @@ function DashboardLayoutContent({
             <h1 className="text-lg font-semibold">HLR Bulk Checker</h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            {/* Language Selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1 px-2">
+                  <Globe className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">
+                    {language === "ru" ? "🇷🇺" : language === "uk" ? "🇺🇦" : "🇬🇧"}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setLanguage("ru")} className="cursor-pointer">
+                  <span className="mr-2">🇷🇺</span> Русский
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLanguage("uk")} className="cursor-pointer">
+                  <span className="mr-2">🇺🇦</span> Українська
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                  <span className="mr-2">🇬🇧</span> English
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="relative h-8 w-8">
+              <Bell className="h-4 w-4" />
             </Button>
             
             {/* Help Center */}
             <Button 
               variant="ghost" 
               size="sm" 
-              className="gap-2"
+              className="gap-1 px-2"
               onClick={() => setLocation('/help')}
             >
-              <HelpCircle className="h-5 w-5" />
-              <span className="hidden sm:inline">Help Center</span>
+              <HelpCircle className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Help</span>
             </Button>
           </div>
         </header>

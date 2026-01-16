@@ -100,12 +100,12 @@
 
 ## Documentation
 - [x] Create user guide with status explanations and usage instructions
-- [ ] Add Help/Manual page inside the application with usage guide
+- [x] Add Help/Manual page inside the application with usage guide (Help Center page created)
 
 ## Bug Fixes
 - [x] Show Reachable status in results table
 - [x] Make results dialog wider to fit all columns
-- [ ] BUG: Large batch (2700+ numbers) stops processing - timeout issue
+- [x] BUG: Large batch (2700+ numbers) stops processing - timeout issue (fixed: 10 min timeout + immediate save)
 - [x] CRITICAL: Save results immediately after each number check (not at the end)
 - [x] Add resume functionality for interrupted batches
 
@@ -139,12 +139,12 @@
 
 
 ## Bug Fixes
-- [ ] Fix: History of single HLR lookups not being saved
+- [x] Fix: History of single HLR lookups not being saved (already implemented)
 
 
 ## Bug Fixes & Improvements
 - [x] Add caching for previously checked numbers to avoid duplicate API calls
-- [ ] Show cached results indicator in UI
+- [x] Show cached results indicator in UI
 - [x] Fix history not being saved/displayed (single checks now save to DB)
 
 - [x] Add duplicate cleaner tab (no API, client-side only) - Tools page
@@ -154,22 +154,19 @@
 
 - [x] Add file upload to Tools page for duplicate cleaning
 
-- [ ] Add visual progress bar for user limits (used/available)
-- [ ] Show warning message when limit is exhausted
-
-- [ ] Add visual progress bar for user limits (used/available)
-- [ ] Show warning message when limit is exhausted
+- [x] Add visual progress bar for user limits (used/available)
+- [x] Show warning message when limit is exhausted
 
 
 ## UI Redesign
-- [ ] Redesign sidebar navigation (Dashboard, HLR Lookup, Batch Checker, Settings, Support)
-- [ ] Add Support link to Telegram (https://t.me/toskaqwe1)
-- [ ] Create Dashboard page with limits, usage stats, account info
-- [ ] Create HLR Lookup page (single check)
-- [ ] Create Batch Checker page (bulk check with completed batches table)
-- [ ] Move Billing & Usage to admin-only section
-- [ ] Add API Key display and Language selector to header
-- [ ] Add Help Center link to header
+- [x] Redesign sidebar navigation (Dashboard, HLR Lookup, Batch Checker, Settings, Support)
+- [x] Add Support link to Telegram (https://t.me/toskaqwe1)
+- [x] Create Dashboard page with limits, usage stats, account info
+- [x] Create HLR Lookup page (single check)
+- [x] Create Batch Checker page (bulk check with completed batches table)
+- [x] Move Billing & Usage to admin-only section
+- [x] Add Language selector to header
+- [x] Add Help Center link to header
 
 ## Help Center
 - [x] Create Help Center page with full HLR guide

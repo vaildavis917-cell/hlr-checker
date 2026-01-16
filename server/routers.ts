@@ -544,6 +544,7 @@ export const appRouter = router({
             isPorted: cachedResult.ported === "true",
             reachable: cachedResult.reachable,
             healthScore,
+            fromCache: true,
           };
         }
         
@@ -628,6 +629,7 @@ export const appRouter = router({
           isPorted: hlrResponse.ported === "true",
           reachable: hlrResponse.reachable,
           healthScore,
+          fromCache: false,
         };
       }),
 

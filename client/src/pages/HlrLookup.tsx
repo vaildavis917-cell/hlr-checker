@@ -2,9 +2,10 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { trpc } from "@/lib/trpc";
-import { Search, CheckCircle, XCircle, Phone, Globe, Building, Signal } from "lucide-react";
+import { Search, CheckCircle, XCircle, Phone, Globe, Building, Signal, Database, Zap } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -16,7 +17,11 @@ export default function HlrLookup() {
   const checkMutation = trpc.hlr.checkSingle.useMutation({
     onSuccess: (data) => {
       setResult(data);
-      toast.success("OK");
+      if (data.fromCache) {
+        toast.success(t.home.cachedResult || "Результат из кэша");
+      } else {
+        toast.success("OK");
+      }
     },
     onError: (error) => {
       toast.error(error.message);
@@ -31,16 +36,13 @@ export default function HlrLookup() {
     checkMutation.mutate({ phoneNumber: phoneNumber.trim() });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case "valid":
-      case "active":
-        return "text-green-500";
-      case "invalid":
-      case "inactive":
-        return "text-red-500";
-      default:
-        return "text-yellow-500";
+  const getValidityStatus = (isValid: boolean, reachable: string) => {
+    if (isValid && reachable === "reachable") {
+      return { text: "Valid", color: "text-green-500" };
+    } else if (isValid) {
+      return { text: "Valid", color: "text-yellow-500" };
+    } else {
+      return { text: "Invalid", color: "text-red-500" };
     }
   };
 
@@ -101,9 +103,23 @@ export default function HlrLookup() {
                   <Phone className="h-5 w-5" />
                   {result.phoneNumber}
                 </span>
-                <span className={`text-lg font-bold ${getStatusColor(result.status)}`}>
-                  {result.status || "Unknown"}
-                </span>
+                <div className="flex items-center gap-2">
+                  {/* Cache indicator */}
+                  {result.fromCache ? (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <Database className="h-3 w-3" />
+                      {t.home.cached || "Кэш"}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="flex items-center gap-1 text-primary border-primary">
+                      <Zap className="h-3 w-3" />
+                      {t.home.live || "Live"}
+                    </Badge>
+                  )}
+                  <span className={`text-lg font-bold ${getValidityStatus(result.isValid, result.reachable).color}`}>
+                    {getValidityStatus(result.isValid, result.reachable).text}
+                  </span>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -149,12 +165,18 @@ export default function HlrLookup() {
               <div className="mt-4 grid gap-2 text-sm">
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground">{t.home.roaming}</span>
-                  <span>{result.roaming || "Unknown"}</span>
+                  <span>{result.isRoaming ? "Yes" : "No"}</span>
                 </div>
-                <div className="flex justify-between py-2">
+                <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground">{t.home.ported}</span>
-                  <span>{result.ported || "Unknown"}</span>
+                  <span>{result.isPorted ? "Yes" : "No"}</span>
                 </div>
+                {result.fromCache && (
+                  <div className="flex justify-between py-2 text-muted-foreground">
+                    <span>{t.home.cacheNote || "Данные из кэша"}</span>
+                    <span className="text-xs">{t.home.cacheExpiry || "Обновляются каждые 24ч"}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

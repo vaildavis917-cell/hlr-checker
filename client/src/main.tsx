@@ -44,10 +44,15 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        // Create AbortController with 10 minute timeout for large batches
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutes
+        
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
-        });
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeoutId));
       },
     }),
   ],

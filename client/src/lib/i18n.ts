@@ -158,6 +158,11 @@ const translations = {
       batchAlreadyComplete: "Проверка уже завершена",
       resumeSuccessPrefix: "Проверка возобновлена. Обработано:",
       resumeErrorMsg: "Не удалось возобновить проверку",
+      cached: "Кэш",
+      live: "Live",
+      cachedResult: "Результат из кэша (24ч)",
+      cacheNote: "Данные из кэша",
+      cacheExpiry: "Обновляются каждые 24ч",
     },
     
     // Cost calculator
@@ -532,6 +537,11 @@ const translations = {
       batchAlreadyComplete: "Перевірка вже завершена",
       resumeSuccessPrefix: "Перевірка відновлена. Оброблено:",
       resumeErrorMsg: "Не вдалося відновити перевірку",
+      cached: "Кеш",
+      live: "Live",
+      cachedResult: "Результат з кешу (24г)",
+      cacheNote: "Дані з кешу",
+      cacheExpiry: "Оновлюються кожні 24г",
     },
     
     // Cost calculator
@@ -906,6 +916,11 @@ const translations = {
       batchAlreadyComplete: "Check already completed",
       resumeSuccessPrefix: "Check resumed. Processed:",
       resumeErrorMsg: "Failed to resume check",
+      cached: "Cache",
+      live: "Live",
+      cachedResult: "Result from cache (24h)",
+      cacheNote: "Data from cache",
+      cacheExpiry: "Updated every 24h",
     },
     
     // Cost calculator
