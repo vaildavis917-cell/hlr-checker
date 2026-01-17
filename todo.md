@@ -188,3 +188,8 @@
 - [x] Add date sorting filter (newest/oldest first)
 - [x] Add status filter (completed/in progress/all)
 - [x] Add user filter dropdown (admin only)
+
+## Admin Report Management
+- [x] Add delete batch API endpoint for admins
+- [x] Add delete button in Dashboard UI with confirmation dialog
+- [x] Add translations for delete functionality (RU/UK/EN)

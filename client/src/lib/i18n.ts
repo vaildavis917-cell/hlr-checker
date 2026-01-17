@@ -330,6 +330,11 @@ const translations = {
       checkHistory: "История проверок",
       batchesFound: "проверок найдено",
       batchResults: "Результаты проверки",
+      deleteBatch: "Удалить отчёт",
+      deleteBatchConfirm: "Вы уверены, что хотите удалить этот отчёт?",
+      deleteBatchDesc: "Все результаты проверки будут безвозвратно удалены.",
+      batchDeleted: "Отчёт удалён",
+      deleteError: "Ошибка при удалении отчёта",
     },
     
     // Field labels
@@ -709,6 +714,11 @@ const translations = {
       checkHistory: "Історія перевірок",
       batchesFound: "перевірок знайдено",
       batchResults: "Результати перевірки",
+      deleteBatch: "Видалити звіт",
+      deleteBatchConfirm: "Ви впевнені, що хочете видалити цей звіт?",
+      deleteBatchDesc: "Всі результати перевірки будуть безповоротно видалені.",
+      batchDeleted: "Звіт видалено",
+      deleteError: "Помилка при видаленні звіту",
     },
     
     // Field labels
@@ -1088,6 +1098,11 @@ const translations = {
       checkHistory: "Check History",
       batchesFound: "checks found",
       batchResults: "Check Results",
+      deleteBatch: "Delete Report",
+      deleteBatchConfirm: "Are you sure you want to delete this report?",
+      deleteBatchDesc: "All check results will be permanently deleted.",
+      batchDeleted: "Report deleted",
+      deleteError: "Error deleting report",
     },
     
     // Field labels

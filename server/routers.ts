@@ -329,6 +329,23 @@ const adminRouter = router({
       await upsertBalanceAlert(input.threshold, input.isEnabled);
       return { success: true };
     }),
+
+  // Delete batch (admin only)
+  deleteBatch: adminProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const batch = await getHlrBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      await deleteHlrBatch(input.batchId);
+      await logAction({ 
+        userId: ctx.user.id, 
+        action: "delete_batch", 
+        details: `Deleted batch #${input.batchId} (${batch.totalNumbers} numbers) from user #${batch.userId}` 
+      });
+      return { success: true };
+    }),
 });
 
 // Export templates router

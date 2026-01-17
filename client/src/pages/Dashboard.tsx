@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import { toast } from "sonner";
 
@@ -233,8 +234,27 @@ function AdminBatchesView() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dateSort, setDateSort] = useState<string>("newest");
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+  const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
   
+  const utils = trpc.useUtils();
   const { data: allBatches, isLoading } = trpc.admin.listAllBatches.useQuery();
+  
+  const deleteBatchMutation = trpc.admin.deleteBatch.useMutation({
+    onSuccess: () => {
+      toast.success(t.adminHistory?.batchDeleted || "Отчёт удалён");
+      utils.admin.listAllBatches.invalidate();
+      setDeletingBatchId(null);
+    },
+    onError: () => {
+      toast.error(t.adminHistory?.deleteError || "Ошибка при удалении");
+      setDeletingBatchId(null);
+    },
+  });
+  
+  const handleDeleteBatch = (batchId: number) => {
+    setDeletingBatchId(batchId);
+    deleteBatchMutation.mutate({ batchId });
+  };
   
   // Get unique users from batches
   const users = allBatches 
@@ -361,31 +381,67 @@ function AdminBatchesView() {
                   {new Date(batch.createdAt).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => setSelectedBatchId(batch.id)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Просмотр
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <FileText className="h-5 w-5" />
-                          Отчёт: {batch.name || `Batch #${batch.id}`}
-                          <Badge variant="outline" className="ml-2">
-                            <User className="h-3 w-3 mr-1" />
-                            {batch.userName}
-                          </Badge>
-                        </DialogTitle>
-                      </DialogHeader>
-                      <BatchResultsView batchId={batch.id} batchName={batch.name} />
-                    </DialogContent>
-                  </Dialog>
+                  <div className="flex items-center gap-1">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setSelectedBatchId(batch.id)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          {t.view}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5" />
+                            {t.adminHistory?.batchResults || "Отчёт"}: {batch.name || `Batch #${batch.id}`}
+                            <Badge variant="outline" className="ml-2">
+                              <User className="h-3 w-3 mr-1" />
+                              {batch.userName}
+                            </Badge>
+                          </DialogTitle>
+                        </DialogHeader>
+                        <BatchResultsView batchId={batch.id} batchName={batch.name} />
+                      </DialogContent>
+                    </Dialog>
+                    
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={deletingBatchId === batch.id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t.adminHistory?.deleteBatch || "Удалить отчёт"}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {t.adminHistory?.deleteBatchConfirm || "Вы уверены, что хотите удалить этот отчёт?"}
+                            <br />
+                            <strong>{batch.name || `Batch #${batch.id}`}</strong> ({batch.totalNumbers} {t.home.numbersDetected})
+                            <br /><br />
+                            {t.adminHistory?.deleteBatchDesc || "Все результаты будут удалены."}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteBatch(batch.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            {t.delete}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
