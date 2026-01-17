@@ -49,7 +49,6 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) 
     { icon: LayoutDashboard, label: t.nav.dashboard, path: "/dashboard" },
     { icon: Search, label: t.nav.hlrLookup, path: "/lookup" },
     { icon: Layers, label: t.nav.batchChecker, path: "/" },
-    { icon: HelpCircle, label: t.nav.support, path: SUPPORT_TELEGRAM, external: true },
   ];
   
   if (isAdmin) {
@@ -233,6 +232,19 @@ function DashboardLayoutContent({
               </DropdownMenu>
             )}
           </div>
+          
+          {/* Support Link */}
+          {!isCollapsed && (
+            <a
+              href={SUPPORT_TELEGRAM}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors w-full mt-2"
+            >
+              <HelpCircle className="h-4 w-4" />
+              <span>{t.nav.support}</span>
+            </a>
+          )}
         </SidebarFooter>
       </Sidebar>
 
