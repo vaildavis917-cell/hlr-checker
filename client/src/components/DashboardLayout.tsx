@@ -58,9 +58,6 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) 
     );
   }
   
-  // Настройки всегда в конце
-  items.push({ icon: Settings, label: t.nav.settings, path: "/settings" });
-  
   return items;
 };
 
@@ -178,37 +175,64 @@ function DashboardLayoutContent({
             </button>
           </div>
           
-          {/* User Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <Avatar className="h-9 w-9 border shrink-0">
-                  <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-                    {user?.name?.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                {!isCollapsed && (
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1">
-                      {user?.role === "admin" ? "Administrator" : "User"}
-                    </p>
-                  </div>
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={logout}
-                className="cursor-pointer text-destructive focus:text-destructive"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>{t.auth.signOut}</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* User Menu with Language Selector */}
+          <div className="flex items-center gap-2 w-full">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-accent/50 transition-colors flex-1 text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Avatar className="h-9 w-9 border shrink-0">
+                    <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                      {user?.name?.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {!isCollapsed && (
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate leading-none">
+                        {user?.name || "-"}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate mt-1">
+                        {user?.role === "admin" ? "Administrator" : "User"}
+                      </p>
+                    </div>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>{t.auth.signOut}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            {/* Language Selector - Globe + Flag */}
+            {!isCollapsed && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 rounded-lg p-2 hover:bg-accent/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">
+                      {language === "ru" ? "🇷🇺" : language === "uk" ? "🇺🇦" : "🇬🇧"}
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setLanguage("ru")} className="cursor-pointer">
+                    <span className="mr-2">🇷🇺</span> Русский
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLanguage("uk")} className="cursor-pointer">
+                    <span className="mr-2">🇺🇦</span> Українська
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
+                    <span className="mr-2">🇬🇧</span> English
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </SidebarFooter>
       </Sidebar>
 
@@ -221,29 +245,6 @@ function DashboardLayoutContent({
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Language Selector */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1 px-2">
-                  <Globe className="h-4 w-4" />
-                  <span className="hidden sm:inline text-xs">
-                    {language === "ru" ? "🇷🇺" : language === "uk" ? "🇺🇦" : "🇬🇧"}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setLanguage("ru")} className="cursor-pointer">
-                  <span className="mr-2">🇷🇺</span> Русский
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage("uk")} className="cursor-pointer">
-                  <span className="mr-2">🇺🇦</span> Українська
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage("en")} className="cursor-pointer">
-                  <span className="mr-2">🇬🇧</span> English
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
             {/* Notifications */}
             <Button variant="ghost" size="icon" className="relative h-8 w-8">
               <Bell className="h-4 w-4" />
