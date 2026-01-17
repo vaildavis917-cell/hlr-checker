@@ -49,7 +49,6 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) 
     { icon: LayoutDashboard, label: t.nav.dashboard, path: "/dashboard" },
     { icon: Search, label: t.nav.hlrLookup, path: "/lookup" },
     { icon: Layers, label: t.nav.batchChecker, path: "/" },
-    { icon: Settings, label: t.nav.settings, path: "/settings" },
     { icon: HelpCircle, label: t.nav.support, path: SUPPORT_TELEGRAM, external: true },
   ];
   
@@ -58,6 +57,9 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) 
       { icon: Users, label: t.nav.users, path: "/admin" },
     );
   }
+  
+  // Настройки всегда в конце
+  items.push({ icon: Settings, label: t.nav.settings, path: "/settings" });
   
   return items;
 };
