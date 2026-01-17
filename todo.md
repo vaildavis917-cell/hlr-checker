@@ -183,3 +183,8 @@
 - [x] Add user filter/search in admin history view
 - [x] Show GSM error codes (lookupOutcome) in results report with descriptions
 - [x] Auto-run database migrations on server start (db:push)
+
+## History Filters
+- [x] Add date sorting filter (newest/oldest first)
+- [x] Add status filter (completed/in progress/all)
+- [x] Add user filter dropdown (admin only)

@@ -230,6 +230,8 @@ function RecentBatches() {
 function AdminBatchesView() {
   const { t } = useLanguage();
   const [userFilter, setUserFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [dateSort, setDateSort] = useState<string>("newest");
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   
   const { data: allBatches, isLoading } = trpc.admin.listAllBatches.useQuery();
@@ -239,10 +241,20 @@ function AdminBatchesView() {
     ? Array.from(new Set(allBatches.map((b: any) => b.userName))).filter(Boolean)
     : [];
   
-  // Filter batches by user
-  const filteredBatches = allBatches?.filter((b: any) => 
-    userFilter === "all" || b.userName === userFilter
-  ) || [];
+  // Filter and sort batches
+  const filteredBatches = allBatches
+    ?.filter((b: any) => {
+      const matchesUser = userFilter === "all" || b.userName === userFilter;
+      const matchesStatus = statusFilter === "all" || 
+        (statusFilter === "completed" && b.status === "completed") ||
+        (statusFilter === "in_progress" && b.status !== "completed");
+      return matchesUser && matchesStatus;
+    })
+    ?.sort((a: any, b: any) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateSort === "newest" ? dateB - dateA : dateA - dateB;
+    }) || [];
 
   if (isLoading) {
     return (
@@ -262,21 +274,54 @@ function AdminBatchesView() {
 
   return (
     <div className="space-y-4">
-      {/* User filter */}
-      <div className="flex items-center gap-2">
-        <User className="h-4 w-4 text-muted-foreground" />
-        <Select value={userFilter} onValueChange={setUserFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Все пользователи" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все пользователи</SelectItem>
-            {users.map((userName: any) => (
-              <SelectItem key={userName} value={userName}>{userName}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground ml-2">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* User filter */}
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <Select value={userFilter} onValueChange={setUserFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Все пользователи" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все пользователи</SelectItem>
+              {users.map((userName: any) => (
+                <SelectItem key={userName} value={userName}>{userName}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Status filter */}
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Статус" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все статусы</SelectItem>
+              <SelectItem value="completed">Завершено</SelectItem>
+              <SelectItem value="in_progress">В процессе</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Date sort */}
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <Select value={dateSort} onValueChange={setDateSort}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Сортировка" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Сначала новые</SelectItem>
+              <SelectItem value="oldest">Сначала старые</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <span className="text-sm text-muted-foreground ml-auto">
           {filteredBatches.length} проверок
         </span>
       </div>
