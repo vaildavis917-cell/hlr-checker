@@ -374,10 +374,7 @@ function getContent(lang: string) {
             q: "Что означает 'Ported: yes'?",
             a: "Это значит, что абонент перенес номер от одного оператора к другому (MNP - Mobile Number Portability). В поле 'Current Carrier' будет текущий оператор, а в 'Original Carrier' - изначальный. Номер при этом полностью рабочий.",
           },
-          {
-            q: "Почему цена за проверку €0.01?",
-            a: "Это стоимость одного HLR запроса к API Seven.io. Кэшированные результаты (повторная проверка того же номера в течение 24 часов) бесплатны. Используйте инструмент очистки дубликатов перед проверкой для экономии.",
-          },
+
           {
             q: "Как узнать свой лимит проверок?",
             a: "Ваши лимиты отображаются на главной странице в разделе 'Лимиты использования'. Если у вас установлен дневной или месячный лимит, вы увидите прогресс-бар с использованием. Если лимита нет - показывается 'без лимита'.",
@@ -493,10 +490,7 @@ function getContent(lang: string) {
             q: "Що означає 'Ported: yes'?",
             a: "Це означає, що абонент переніс номер від одного оператора до іншого (MNP - Mobile Number Portability). В полі 'Current Carrier' буде поточний оператор, а в 'Original Carrier' - початковий. Номер при цьому повністю робочий.",
           },
-          {
-            q: "Чому ціна за перевірку €0.01?",
-            a: "Це вартість одного HLR запиту до API Seven.io. Кешовані результати (повторна перевірка того ж номера протягом 24 годин) безкоштовні. Використовуйте інструмент очищення дублікатів перед перевіркою для економії.",
-          },
+
           {
             q: "Як дізнатися свій ліміт перевірок?",
             a: "Ваші ліміти відображаються на головній сторінці в розділі 'Ліміти використання'. Якщо у вас встановлено денний або місячний ліміт, ви побачите прогрес-бар з використанням. Якщо ліміту немає - показується 'без ліміту'.",
@@ -612,10 +606,7 @@ function getContent(lang: string) {
             q: "What does 'Ported: yes' mean?",
             a: "This means subscriber transferred number from one carrier to another (MNP - Mobile Number Portability). 'Current Carrier' field shows current carrier, 'Original Carrier' shows original one. Number is fully working.",
           },
-          {
-            q: "Why is check price €0.01?",
-            a: "This is the cost of one HLR request to Seven.io API. Cached results (re-checking same number within 24 hours) are free. Use duplicate cleaning tool before checking to save money.",
-          },
+
           {
             q: "How to know my check limit?",
             a: "Your limits are shown on main page in 'Usage Limits' section. If you have daily or monthly limit set, you'll see progress bar with usage. If no limit - shows 'unlimited'.",

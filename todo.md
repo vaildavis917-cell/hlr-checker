@@ -175,3 +175,11 @@
 - [x] Add translations for Help Center (RU/UK/EN)
 - [x] Link Help Center button in header to the page
 - [x] Add FAQ/Troubleshooting section with self-help solutions
+
+## Admin All Users History
+- [x] Create backend procedure to get all batches from all users (admin only)
+- [x] Update Dashboard to show all users' check history for admins
+- [x] Add ability to view full report for each batch
+- [x] Add user filter/search in admin history view
+- [x] Show GSM error codes (lookupOutcome) in results report with descriptions
+- [x] Auto-run database migrations on server start (db:push)

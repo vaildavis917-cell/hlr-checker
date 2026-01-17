@@ -2,6 +2,10 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -27,7 +31,29 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+// Run database migrations automatically
+async function runMigrations() {
+  try {
+    console.log("[Database] Running migrations...");
+    const { stdout, stderr } = await execAsync("pnpm db:push", {
+      cwd: process.cwd(),
+      timeout: 60000, // 60 second timeout
+    });
+    if (stdout) console.log("[Database] Migration output:", stdout);
+    if (stderr && !stderr.includes("No config path")) {
+      console.warn("[Database] Migration warnings:", stderr);
+    }
+    console.log("[Database] Migrations completed successfully");
+  } catch (error: any) {
+    // Don't fail startup if migrations fail - DB might already be up to date
+    console.warn("[Database] Migration warning:", error.message || error);
+  }
+}
+
 async function startServer() {
+  // Run migrations before starting server
+  await runMigrations();
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
