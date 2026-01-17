@@ -55,7 +55,6 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) 
   
   if (isAdmin) {
     items.push(
-      { icon: CreditCard, label: t.nav.billing, path: "/admin/billing" },
       { icon: Users, label: t.nav.users, path: "/admin" },
     );
   }
