@@ -196,3 +196,6 @@
 
 ## Bug Fixes - Large Files
 - [x] Fix: 2000+ numbers batch only processes 1000 numbers (MySQL IN() limit fixed with chunking)
+
+## UI Improvements
+- [x] Add real-time progress bar with percentage during batch processing

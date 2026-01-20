@@ -89,7 +89,15 @@ export default function Home() {
   // API queries
   const balanceQuery = trpc.hlr.getBalance.useQuery(undefined, { enabled: isAdmin });
   const userStatsQuery = trpc.hlr.getUserStats.useQuery();
-  const batchesQuery = trpc.hlr.listBatches.useQuery();
+  
+  // Check if any batch is currently processing
+  const batchesQuery = trpc.hlr.listBatches.useQuery(undefined, {
+    refetchInterval: (data) => {
+      // Auto-refresh every 2 seconds if any batch is processing
+      const hasProcessing = data?.state?.data?.some((b: any) => b.status === "processing");
+      return hasProcessing ? 2000 : false;
+    },
+  });
   const incompleteBatchesQuery = trpc.hlr.getIncompleteBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
     currentBatchId !== null ? { batchId: currentBatchId, page: 1, pageSize: 1000 } : { batchId: -1, page: 1, pageSize: 1000 },
@@ -791,10 +799,20 @@ export default function Home() {
                         </div>
                       </div>
                       {batch.status === "processing" && (
-                        <Progress 
-                          value={(batch.processedNumbers / batch.totalNumbers) * 100} 
-                          className="mt-2"
-                        />
+                        <div className="mt-3 space-y-1">
+                          <div className="flex justify-between items-center text-xs text-muted-foreground">
+                            <span>
+                              {t.home.progressProcessing || "Обрабатывается"}: {batch.processedNumbers} {t.home.progressOf || "из"} {batch.totalNumbers}
+                            </span>
+                            <span className="font-medium text-primary">
+                              {Math.round((batch.processedNumbers / batch.totalNumbers) * 100)}% {t.home.progressPercent || "выполнено"}
+                            </span>
+                          </div>
+                          <Progress 
+                            value={(batch.processedNumbers / batch.totalNumbers) * 100} 
+                            className="h-2 [&>div]:bg-primary [&>div]:transition-all [&>div]:duration-300"
+                          />
+                        </div>
                       )}
                     </div>
                   ))}
