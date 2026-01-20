@@ -196,6 +196,7 @@ export async function getCachedResult(phoneNumber: string, hoursAgo: number = 24
 }
 
 // Get cached results for multiple phone numbers
+// Splits into chunks to avoid MySQL IN() limit (~1000 elements)
 export async function getCachedResults(phoneNumbers: string[], hoursAgo: number = 24): Promise<Map<string, HlrResult>> {
   const db = await getDb();
   if (!db) return new Map();
@@ -203,23 +204,34 @@ export async function getCachedResults(phoneNumbers: string[], hoursAgo: number 
   if (phoneNumbers.length === 0) return new Map();
   
   const cutoffDate = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
-  
-  const results = await db.select()
-    .from(hlrResults)
-    .where(
-      and(
-        inArray(hlrResults.phoneNumber, phoneNumbers),
-        gte(hlrResults.createdAt, cutoffDate),
-        eq(hlrResults.status, "success")
-      )
-    )
-    .orderBy(desc(hlrResults.createdAt));
-  
-  // Create map with most recent result for each phone
   const cacheMap = new Map<string, HlrResult>();
-  for (const result of results) {
-    if (!cacheMap.has(result.phoneNumber)) {
-      cacheMap.set(result.phoneNumber, result);
+  
+  // Process in chunks of 500 to avoid MySQL IN() limit
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < phoneNumbers.length; i += CHUNK_SIZE) {
+    const chunk = phoneNumbers.slice(i, i + CHUNK_SIZE);
+    
+    try {
+      const results = await db.select()
+        .from(hlrResults)
+        .where(
+          and(
+            inArray(hlrResults.phoneNumber, chunk),
+            gte(hlrResults.createdAt, cutoffDate),
+            eq(hlrResults.status, "success")
+          )
+        )
+        .orderBy(desc(hlrResults.createdAt));
+      
+      // Add to map with most recent result for each phone
+      for (const result of results) {
+        if (!cacheMap.has(result.phoneNumber)) {
+          cacheMap.set(result.phoneNumber, result);
+        }
+      }
+    } catch (error) {
+      console.error(`[Cache] Error fetching chunk ${i}-${i + CHUNK_SIZE}:`, error);
+      // Continue with other chunks even if one fails
     }
   }
   

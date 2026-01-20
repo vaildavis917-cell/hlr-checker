@@ -821,7 +821,7 @@ export const appRouter = router({
           await createHlrResult(resultData);
 
           // Update progress every 10 numbers or at the end
-          if (processedCount % 10 === 0 || i === phoneNumbers.length - 1) {
+          if (processedCount % 10 === 0 || i === numbersToActuallyCheck.length - 1) {
             await updateHlrBatch(batchId, {
               processedNumbers: processedCount,
               validNumbers: validCount,

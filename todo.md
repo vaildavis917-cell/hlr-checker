@@ -193,3 +193,6 @@
 - [x] Add delete batch API endpoint for admins
 - [x] Add delete button in Dashboard UI with confirmation dialog
 - [x] Add translations for delete functionality (RU/UK/EN)
+
+## Bug Fixes - Large Files
+- [x] Fix: 2000+ numbers batch only processes 1000 numbers (MySQL IN() limit fixed with chunking)
