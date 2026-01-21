@@ -229,3 +229,8 @@
 
 ## Help Center Simplification
 - [x] Simplify Help Center - remove technical info, keep only basic user guide
+
+## GSM Codes & Status Display
+- [x] Show GSM code (lookupOutcome) in results table
+- [x] Show detailed status (Bad Number, Absent Subscriber, etc.) in results
+- [x] Add GSM codes documentation to Help Center

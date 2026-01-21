@@ -1,17 +1,17 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { 
   HelpCircle, 
   CheckCircle, 
   XCircle, 
-  Phone, 
-  Upload, 
-  Download,
   Zap,
   MessageCircle,
-  AlertCircle
+  AlertCircle,
+  Info
 } from "lucide-react";
 
 export default function HelpCenter() {
@@ -104,6 +104,43 @@ export default function HelpCenter() {
           </CardContent>
         </Card>
 
+        {/* GSM Codes */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              {content.gsmCodes.title}
+            </CardTitle>
+            <CardDescription>{content.gsmCodes.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">{content.gsmCodes.codeHeader}</TableHead>
+                    <TableHead>{content.gsmCodes.statusHeader}</TableHead>
+                    <TableHead>{content.gsmCodes.actionHeader}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {content.gsmCodes.codes.map((code, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <Badge variant={code.variant as any} className="text-xs">
+                          {code.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">{code.meaning}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{code.action}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quality Score */}
         <Card>
           <CardHeader>
@@ -180,6 +217,39 @@ export default function HelpCenter() {
 }
 
 function getContent(lang: string) {
+  const gsmCodesRu = [
+    { label: "OK", variant: "default", meaning: "Номер активен и доступен", action: "Можно использовать" },
+    { label: "Bad Number", variant: "destructive", meaning: "Номер не существует или неверный", action: "Удалить из базы" },
+    { label: "Absent", variant: "secondary", meaning: "Телефон выключен или вне сети", action: "Повторить проверку позже" },
+    { label: "Blocked", variant: "destructive", meaning: "Номер заблокирован оператором", action: "Удалить из базы" },
+    { label: "Barred", variant: "secondary", meaning: "Вызовы заблокированы абонентом", action: "Проверить вручную" },
+    { label: "Roaming", variant: "secondary", meaning: "Абонент в роуминге", action: "Номер активен, но за границей" },
+    { label: "No Service", variant: "secondary", meaning: "Услуга не подключена", action: "Проверить тип номера" },
+    { label: "Error", variant: "secondary", meaning: "Ошибка сети или системы", action: "Повторить проверку позже" },
+  ];
+
+  const gsmCodesUk = [
+    { label: "OK", variant: "default", meaning: "Номер активний і доступний", action: "Можна використовувати" },
+    { label: "Bad Number", variant: "destructive", meaning: "Номер не існує або невірний", action: "Видалити з бази" },
+    { label: "Absent", variant: "secondary", meaning: "Телефон вимкнено або поза мережею", action: "Повторити перевірку пізніше" },
+    { label: "Blocked", variant: "destructive", meaning: "Номер заблоковано оператором", action: "Видалити з бази" },
+    { label: "Barred", variant: "secondary", meaning: "Виклики заблоковані абонентом", action: "Перевірити вручну" },
+    { label: "Roaming", variant: "secondary", meaning: "Абонент у роумінгу", action: "Номер активний, але за кордоном" },
+    { label: "No Service", variant: "secondary", meaning: "Послуга не підключена", action: "Перевірити тип номера" },
+    { label: "Error", variant: "secondary", meaning: "Помилка мережі або системи", action: "Повторити перевірку пізніше" },
+  ];
+
+  const gsmCodesEn = [
+    { label: "OK", variant: "default", meaning: "Number is active and reachable", action: "Safe to use" },
+    { label: "Bad Number", variant: "destructive", meaning: "Number doesn't exist or is invalid", action: "Remove from database" },
+    { label: "Absent", variant: "secondary", meaning: "Phone is off or out of network", action: "Retry check later" },
+    { label: "Blocked", variant: "destructive", meaning: "Number blocked by carrier", action: "Remove from database" },
+    { label: "Barred", variant: "secondary", meaning: "Calls blocked by subscriber", action: "Check manually" },
+    { label: "Roaming", variant: "secondary", meaning: "Subscriber is roaming", action: "Number active but abroad" },
+    { label: "No Service", variant: "secondary", meaning: "Service not provisioned", action: "Check number type" },
+    { label: "Error", variant: "secondary", meaning: "Network or system error", action: "Retry check later" },
+  ];
+
   const content = {
     ru: {
       title: "Справка",
@@ -207,6 +277,14 @@ function getContent(lang: string) {
           desc: "Телефон выключен или вне зоны покрытия. Попробуйте проверить позже." 
         },
       },
+      gsmCodes: {
+        title: "GSM коды статусов",
+        description: "Детальная информация о состоянии номера от оператора связи",
+        codeHeader: "Статус",
+        statusHeader: "Значение",
+        actionHeader: "Рекомендация",
+        codes: gsmCodesRu,
+      },
       quality: {
         title: "Оценка качества",
         description: "Система оценивает надёжность номера по шкале от 0 до 100",
@@ -225,12 +303,12 @@ function getContent(lang: string) {
             a: "Используйте международный формат с кодом страны: +49176123456 или 49176123456. Можно вводить по одному номеру на строку или через запятую.",
           },
           {
-            q: "Номер показывает «невалидный», но я уверен что он рабочий",
-            a: "Проверка показывает текущий статус в сети оператора. Возможно, у абонента временные проблемы с оплатой или SIM-карта заблокирована. Попробуйте проверить через несколько часов.",
+            q: "Что означает статус «Bad Number»?",
+            a: "Это означает, что номер не существует в сети оператора. Такие номера следует удалить из базы — они никогда не будут работать.",
           },
           {
-            q: "Что делать если проверка остановилась?",
-            a: "Не волнуйтесь — все проверенные номера уже сохранены. Найдите проверку в истории и нажмите «Возобновить».",
+            q: "Что означает статус «Absent»?",
+            a: "Телефон абонента выключен или находится вне зоны покрытия. Номер может быть рабочим — попробуйте проверить его через несколько часов.",
           },
           {
             q: "Как скачать только валидные номера?",
@@ -274,6 +352,14 @@ function getContent(lang: string) {
           desc: "Телефон вимкнено або поза зоною покриття. Спробуйте перевірити пізніше." 
         },
       },
+      gsmCodes: {
+        title: "GSM коди статусів",
+        description: "Детальна інформація про стан номера від оператора зв'язку",
+        codeHeader: "Статус",
+        statusHeader: "Значення",
+        actionHeader: "Рекомендація",
+        codes: gsmCodesUk,
+      },
       quality: {
         title: "Оцінка якості",
         description: "Система оцінює надійність номера за шкалою від 0 до 100",
@@ -292,12 +378,12 @@ function getContent(lang: string) {
             a: "Використовуйте міжнародний формат з кодом країни: +49176123456 або 49176123456. Можна вводити по одному номеру на рядок або через кому.",
           },
           {
-            q: "Номер показує «невалідний», але я впевнений що він робочий",
-            a: "Перевірка показує поточний статус у мережі оператора. Можливо, у абонента тимчасові проблеми з оплатою або SIM-картка заблокована. Спробуйте перевірити через кілька годин.",
+            q: "Що означає статус «Bad Number»?",
+            a: "Це означає, що номер не існує в мережі оператора. Такі номери слід видалити з бази — вони ніколи не будуть працювати.",
           },
           {
-            q: "Що робити якщо перевірка зупинилася?",
-            a: "Не хвилюйтесь — всі перевірені номери вже збережені. Знайдіть перевірку в історії та натисніть «Відновити».",
+            q: "Що означає статус «Absent»?",
+            a: "Телефон абонента вимкнено або він знаходиться поза зоною покриття. Номер може бути робочим — спробуйте перевірити його через кілька годин.",
           },
           {
             q: "Як завантажити тільки валідні номери?",
@@ -341,6 +427,14 @@ function getContent(lang: string) {
           desc: "Phone is off or out of coverage. Try checking later." 
         },
       },
+      gsmCodes: {
+        title: "GSM Status Codes",
+        description: "Detailed information about number status from the carrier",
+        codeHeader: "Status",
+        statusHeader: "Meaning",
+        actionHeader: "Recommendation",
+        codes: gsmCodesEn,
+      },
       quality: {
         title: "Quality Score",
         description: "The system rates number reliability on a scale from 0 to 100",
@@ -359,12 +453,12 @@ function getContent(lang: string) {
             a: "Use international format with country code: +49176123456 or 49176123456. You can enter one number per line or separate with commas.",
           },
           {
-            q: "Number shows \"invalid\" but I'm sure it's working",
-            a: "The check shows current status in carrier network. The subscriber may have temporary payment issues or blocked SIM. Try checking in a few hours.",
+            q: "What does \"Bad Number\" status mean?",
+            a: "This means the number doesn't exist in the carrier's network. Such numbers should be removed from your database — they will never work.",
           },
           {
-            q: "What to do if check stopped?",
-            a: "Don't worry — all checked numbers are already saved. Find the check in history and click \"Resume\".",
+            q: "What does \"Absent\" status mean?",
+            a: "The subscriber's phone is off or out of coverage area. The number might be working — try checking it again in a few hours.",
           },
           {
             q: "How to download only valid numbers?",

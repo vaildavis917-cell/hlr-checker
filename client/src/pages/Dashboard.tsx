@@ -15,18 +15,26 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import { toast } from "sonner";
 
-// GSM Error codes mapping
-const GSM_CODES: Record<string, { meaning: string; recommendation: string }> = {
-  "0": { meaning: "Успешно - номер валиден", recommendation: "Можно использовать" },
-  "1": { meaning: "Неизвестный абонент", recommendation: "Удалить из базы" },
-  "6": { meaning: "Абонент отсутствует", recommendation: "Повторить позже" },
-  "7": { meaning: "Входящие запрещены", recommendation: "Проверить вручную" },
-  "8": { meaning: "Роуминг запрещен", recommendation: "Номер в роуминге" },
-  "11": { meaning: "Teleservice не поддерживается", recommendation: "Проверить тип номера" },
-  "13": { meaning: "Вызов заблокирован", recommendation: "Номер заблокирован" },
-  "21": { meaning: "Нет ответа от сети", recommendation: "Повторить позже" },
-  "27": { meaning: "Абонент недоступен", recommendation: "Телефон выключен" },
-  "31": { meaning: "Сетевая ошибка", recommendation: "Повторить позже" },
+// GSM Error codes mapping with short labels
+const GSM_CODES: Record<string, { meaning: string; shortLabel: string; recommendation: string }> = {
+  "0": { meaning: "Delivered - номер активен", shortLabel: "OK", recommendation: "Можно использовать" },
+  "1": { meaning: "Unknown Subscriber - неизвестный абонент", shortLabel: "Bad Number", recommendation: "Удалить из базы" },
+  "5": { meaning: "Unidentified Subscriber - неопознанный абонент", shortLabel: "Bad Number", recommendation: "Удалить из базы" },
+  "6": { meaning: "Absent Subscriber - абонент отсутствует", shortLabel: "Absent", recommendation: "Телефон выключен, повторить позже" },
+  "7": { meaning: "Unknown Equipment - неизвестное оборудование", shortLabel: "Bad Device", recommendation: "Проверить вручную" },
+  "8": { meaning: "Roaming Not Allowed - роуминг запрещен", shortLabel: "Roaming", recommendation: "Номер в роуминге" },
+  "9": { meaning: "Illegal Subscriber - нелегальный абонент", shortLabel: "Blocked", recommendation: "Номер заблокирован" },
+  "10": { meaning: "Bearer Service Not Provisioned - услуга не подключена", shortLabel: "No Service", recommendation: "Проверить тип номера" },
+  "11": { meaning: "Teleservice Not Provisioned - услуга не поддерживается", shortLabel: "No Service", recommendation: "Проверить тип номера" },
+  "12": { meaning: "Illegal Equipment - нелегальное оборудование", shortLabel: "Blocked", recommendation: "Устройство заблокировано" },
+  "13": { meaning: "Call Barred - вызов заблокирован", shortLabel: "Barred", recommendation: "Номер заблокирован" },
+  "21": { meaning: "Facility Not Supported - функция не поддерживается", shortLabel: "No Support", recommendation: "Повторить позже" },
+  "27": { meaning: "Absent Subscriber SM - абонент недоступен для SMS", shortLabel: "Absent", recommendation: "Телефон выключен" },
+  "31": { meaning: "System Failure - системная ошибка", shortLabel: "Error", recommendation: "Повторить позже" },
+  "32": { meaning: "Data Missing - данные отсутствуют", shortLabel: "No Data", recommendation: "Повторить позже" },
+  "34": { meaning: "System Failure - сбой системы", shortLabel: "Error", recommendation: "Повторить позже" },
+  "35": { meaning: "Data Missing - данные отсутствуют", shortLabel: "No Data", recommendation: "Повторить позже" },
+  "36": { meaning: "Unexpected Data Value - неожиданные данные", shortLabel: "Error", recommendation: "Повторить позже" },
 };
 
 export default function Dashboard() {
@@ -789,7 +797,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
                 </div>
               </TableHead>
               <TableHead className="w-[60px]">Страна</TableHead>
-              <TableHead className="w-[50px]">GSM</TableHead>
+              <TableHead className="w-[80px]">GSM Статус</TableHead>
               <TableHead 
                 className="w-[70px] cursor-pointer hover:bg-muted/50 select-none"
                 onClick={() => handleSort("healthScore")}
@@ -838,13 +846,15 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
                   </TableCell>
                   <TableCell className="py-2">
                     {result.gsmCode ? (
-                      <Badge 
-                        variant={result.gsmCode === "0" ? "default" : "secondary"} 
-                        className="text-[10px] px-1 py-0"
-                        title={GSM_CODES[result.gsmCode]?.meaning || result.gsmMessage}
-                      >
-                        {result.gsmCode}
-                      </Badge>
+                      <div className="flex flex-col">
+                        <Badge 
+                          variant={result.gsmCode === "0" ? "default" : result.gsmCode === "1" || result.gsmCode === "5" ? "destructive" : "secondary"} 
+                          className="text-[10px] px-1 py-0 whitespace-nowrap"
+                          title={GSM_CODES[result.gsmCode]?.meaning || result.gsmMessage}
+                        >
+                          {GSM_CODES[result.gsmCode]?.shortLabel || `GSM ${result.gsmCode}`}
+                        </Badge>
+                      </div>
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>
                     )}
