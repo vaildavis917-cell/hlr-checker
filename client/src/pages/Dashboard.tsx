@@ -393,7 +393,7 @@ function AdminBatchesView() {
                           {t.view}
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="w-[95vw] max-w-[1400px] h-[90vh] flex flex-col">
+                      <DialogContent className="w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] flex flex-col overflow-hidden">
                         <DialogHeader>
                           <DialogTitle className="flex items-center gap-2">
                             <FileText className="h-5 w-5" />

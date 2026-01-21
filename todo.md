@@ -225,3 +225,7 @@
 ## Pagination
 - [x] Add pagination with page size selector (50/100/1000)
 - [x] Add page navigation controls
+
+## Help Center Simplification
+- [ ] Remove technical/admin content from Help Center
+- [ ] Keep only basic user information (how to check numbers, what results mean)
