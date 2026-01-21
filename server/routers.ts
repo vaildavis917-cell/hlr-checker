@@ -38,6 +38,7 @@ import {
   getDefaultExportTemplate,
   calculateHealthScore,
   calculateBatchHealthScores,
+  classifyQualityByHealthScore,
   getAllBatches,
   getCachedResults,
   getCachedResult,
@@ -304,11 +305,15 @@ const adminRouter = router({
       }
       const paginatedResults = await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
       
-      // Add health scores to results
-      const resultsWithScores = paginatedResults.results.map(result => ({
-        ...result,
-        healthScore: calculateHealthScore(result),
-      }));
+      // Add health scores and status classification to results
+      const resultsWithScores = paginatedResults.results.map(result => {
+        const healthScore = calculateHealthScore(result);
+        return {
+          ...result,
+          healthScore,
+          qualityStatus: classifyQualityByHealthScore(healthScore),
+        };
+      });
       
       return {
         results: resultsWithScores,
@@ -884,11 +889,15 @@ export const appRouter = router({
         }
         const paginatedResults = await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
         
-        // Add health scores to results
-        const resultsWithScores = paginatedResults.results.map(result => ({
-          ...result,
-          healthScore: calculateHealthScore(result),
-        }));
+        // Add health scores and status classification to results
+        const resultsWithScores = paginatedResults.results.map(result => {
+          const healthScore = calculateHealthScore(result);
+          return {
+            ...result,
+            healthScore,
+            qualityStatus: classifyQualityByHealthScore(healthScore),
+          };
+        });
         
         return {
           results: resultsWithScores,

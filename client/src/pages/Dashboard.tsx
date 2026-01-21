@@ -527,39 +527,87 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
     return <div className="text-center py-8 text-muted-foreground">Нет результатов</div>;
   }
 
-  // Calculate stats
+  // Calculate stats - validity from API
   const validCount = data.results.filter((r: any) => r.validNumber === "valid").length;
   const invalidCount = data.results.filter((r: any) => r.validNumber === "invalid").length;
   const unknownCount = data.results.length - validCount - invalidCount;
+  
+  // Calculate quality stats based on Health Score
+  const highQuality = data.results.filter((r: any) => (r.healthScore || 0) >= 60).length;
+  const mediumQuality = data.results.filter((r: any) => (r.healthScore || 0) >= 40 && (r.healthScore || 0) < 60).length;
+  const lowQuality = data.results.filter((r: any) => (r.healthScore || 0) < 40).length;
 
   return (
     <div className="space-y-4">
-      {/* Stats summary */}
-      <div className="grid grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold">{data.results.length}</div>
-            <p className="text-xs text-muted-foreground">Всего номеров</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-green-500">{validCount}</div>
-            <p className="text-xs text-muted-foreground">Валидных</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-red-500">{invalidCount}</div>
-            <p className="text-xs text-muted-foreground">Невалидных</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="text-2xl font-bold text-yellow-500">{unknownCount}</div>
-            <p className="text-xs text-muted-foreground">Неизвестно</p>
-          </CardContent>
-        </Card>
+      {/* Stats summary - two rows */}
+      <div className="space-y-3">
+        {/* Row 1: Validity from API */}
+        <div className="grid grid-cols-4 gap-3">
+          <Card className="bg-muted/30">
+            <CardContent className="pt-3 pb-2">
+              <div className="text-xl font-bold">{data.results.length}</div>
+              <p className="text-[10px] text-muted-foreground">Всего</p>
+            </CardContent>
+          </Card>
+          <Card className="border-green-500/30">
+            <CardContent className="pt-3 pb-2">
+              <div className="text-xl font-bold text-green-500">{validCount}</div>
+              <p className="text-[10px] text-muted-foreground">Валидных (API)</p>
+            </CardContent>
+          </Card>
+          <Card className="border-red-500/30">
+            <CardContent className="pt-3 pb-2">
+              <div className="text-xl font-bold text-red-500">{invalidCount}</div>
+              <p className="text-[10px] text-muted-foreground">Невалидных (API)</p>
+            </CardContent>
+          </Card>
+          <Card className="border-yellow-500/30">
+            <CardContent className="pt-3 pb-2">
+              <div className="text-xl font-bold text-yellow-500">{unknownCount}</div>
+              <p className="text-[10px] text-muted-foreground">Неизвестно</p>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Row 2: Quality based on Health Score */}
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="border-green-500/50 bg-green-500/5">
+            <CardContent className="pt-3 pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xl font-bold text-green-500">{highQuality}</div>
+                  <p className="text-[10px] text-muted-foreground">Высокое качество</p>
+                </div>
+                <div className="text-green-500 text-lg">↑</div>
+              </div>
+              <p className="text-[9px] text-green-600/70 mt-1">Health Score ≥ 60</p>
+            </CardContent>
+          </Card>
+          <Card className="border-yellow-500/50 bg-yellow-500/5">
+            <CardContent className="pt-3 pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xl font-bold text-yellow-500">{mediumQuality}</div>
+                  <p className="text-[10px] text-muted-foreground">Среднее качество</p>
+                </div>
+                <div className="text-yellow-500 text-lg">→</div>
+              </div>
+              <p className="text-[9px] text-yellow-600/70 mt-1">Health Score 40-59</p>
+            </CardContent>
+          </Card>
+          <Card className="border-red-500/50 bg-red-500/5">
+            <CardContent className="pt-3 pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xl font-bold text-red-500">{lowQuality}</div>
+                  <p className="text-[10px] text-muted-foreground">Низкое качество</p>
+                </div>
+                <div className="text-red-500 text-lg">↓</div>
+              </div>
+              <p className="text-[9px] text-red-600/70 mt-1">Health Score &lt; 40</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Export button */}
@@ -570,67 +618,76 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
         </Button>
       </div>
 
-      {/* Results table */}
+      {/* Results table - compact view without horizontal scroll */}
       <div className="rounded-md border max-h-[500px] overflow-y-auto">
         <Table>
-          <TableHeader className="sticky top-0 bg-background">
+          <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
-              <TableHead>Номер</TableHead>
-              <TableHead>Статус</TableHead>
-              <TableHead>Достижимость</TableHead>
-              <TableHead>Оператор</TableHead>
-              <TableHead>Страна</TableHead>
-              <TableHead>GSM код</TableHead>
-              <TableHead>Health</TableHead>
+              <TableHead className="w-[140px]">Номер</TableHead>
+              <TableHead className="w-[100px]">Статус</TableHead>
+              <TableHead className="w-[120px]">Оператор</TableHead>
+              <TableHead className="w-[60px]">Страна</TableHead>
+              <TableHead className="w-[50px]">GSM</TableHead>
+              <TableHead className="w-[70px]">Качество</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.results.map((result: any) => (
-              <TableRow key={result.id}>
-                <TableCell className="font-mono text-sm">
-                  {result.internationalFormat || result.phoneNumber}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={result.validNumber === "valid" ? "default" : result.validNumber === "invalid" ? "destructive" : "secondary"}>
-                    {result.validNumber === "valid" ? "Valid" : result.validNumber === "invalid" ? "Invalid" : "Unknown"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-xs">
-                    {result.reachable || "-"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div>
-                    <p className="font-medium text-sm">{result.currentCarrierName || "-"}</p>
-                    <p className="text-xs text-muted-foreground">{result.currentNetworkType || ""}</p>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm">{result.countryCode}</span>
-                    <span className="text-xs text-muted-foreground">{result.countryName}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {result.gsmCode ? (
-                    <div className="flex items-center gap-1">
-                      <Badge variant={result.gsmCode === "0" ? "default" : "secondary"} className="text-xs">
+            {data.results.map((result: any) => {
+              const healthScore = result.healthScore || 0;
+              const qualityStatus = healthScore >= 60 ? "high" : healthScore >= 40 ? "medium" : "low";
+              const qualityColor = qualityStatus === "high" ? "text-green-500" : qualityStatus === "medium" ? "text-yellow-500" : "text-red-500";
+              const qualityBg = qualityStatus === "high" ? "bg-green-500/10" : qualityStatus === "medium" ? "bg-yellow-500/10" : "bg-red-500/10";
+              
+              return (
+                <TableRow key={result.id}>
+                  <TableCell className="font-mono text-xs py-2">
+                    <div className="flex flex-col">
+                      <span>{result.internationalFormat || result.phoneNumber}</span>
+                      {result.reachable && (
+                        <span className="text-[10px] text-muted-foreground">{result.reachable}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <Badge 
+                      variant={result.validNumber === "valid" ? "default" : result.validNumber === "invalid" ? "destructive" : "secondary"}
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      {result.validNumber === "valid" ? "✓" : result.validNumber === "invalid" ? "✗" : "?"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <div className="text-xs truncate max-w-[120px]" title={result.currentCarrierName}>
+                      {result.currentCarrierName || "-"}
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <span className="text-xs font-medium">{result.countryCode || "-"}</span>
+                  </TableCell>
+                  <TableCell className="py-2">
+                    {result.gsmCode ? (
+                      <Badge 
+                        variant={result.gsmCode === "0" ? "default" : "secondary"} 
+                        className="text-[10px] px-1 py-0"
+                        title={GSM_CODES[result.gsmCode]?.meaning || result.gsmMessage}
+                      >
                         {result.gsmCode}
                       </Badge>
-                      <span className="text-xs text-muted-foreground" title={GSM_CODES[result.gsmCode]?.recommendation}>
-                        {GSM_CODES[result.gsmCode]?.meaning || result.gsmMessage || ""}
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${qualityBg} ${qualityColor}`}>
+                      <span>{healthScore}</span>
+                      <span className="text-[10px]">
+                        {qualityStatus === "high" ? "↑" : qualityStatus === "medium" ? "→" : "↓"}
                       </span>
                     </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <HealthScoreBadge score={result.healthScore || 0} size="sm" />
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

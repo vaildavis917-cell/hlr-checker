@@ -199,3 +199,14 @@
 
 ## UI Improvements
 - [x] Add real-time progress bar with percentage during batch processing
+
+## Health Score Classification (Improved)
+- [x] Implement separate qualityStatus field (high/medium/low) based on Health Score
+- [x] Keep validNumber from API unchanged
+- [x] Update UI to show both validity and quality statuses
+- [ ] Add quality filter to results
+- [ ] Add translations for quality statuses (RU/UK/EN)
+
+## UI Fix - Results Table
+- [x] Remove horizontal scrollbar from results table
+- [x] Make table responsive and fit all content without scrolling

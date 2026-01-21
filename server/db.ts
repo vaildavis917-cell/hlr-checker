@@ -713,12 +713,59 @@ export function calculateHealthScore(result: HlrResult): number {
   return Math.min(100, Math.max(0, score));
 }
 
+// Classify quality status based on Health Score
+// This is separate from validNumber (which comes from API)
+export type QualityStatus = "high" | "medium" | "low";
+
+export function classifyQualityByHealthScore(healthScore: number): QualityStatus {
+  if (healthScore >= 60) {
+    return "high";      // Good for SMS delivery
+  } else if (healthScore >= 40) {
+    return "medium";    // May have delivery issues
+  }
+  return "low";         // High risk of delivery failure
+}
+
+// Get quality status details for UI display
+export function getQualityDetails(healthScore: number): {
+  status: QualityStatus;
+  label: string;
+  description: string;
+  color: "green" | "yellow" | "red";
+} {
+  if (healthScore >= 60) {
+    return {
+      status: "high",
+      label: "Высокое",
+      description: "Хорошее качество для SMS-рассылки",
+      color: "green",
+    };
+  } else if (healthScore >= 40) {
+    return {
+      status: "medium",
+      label: "Среднее",
+      description: "Возможны проблемы с доставкой",
+      color: "yellow",
+    };
+  }
+  return {
+    status: "low",
+    label: "Низкое",
+    description: "Высокий риск недоставки",
+    color: "red",
+  };
+}
+
 // Calculate health scores for batch results
-export function calculateBatchHealthScores(results: HlrResult[]): { result: HlrResult; healthScore: number }[] {
-  return results.map(result => ({
-    result,
-    healthScore: calculateHealthScore(result),
-  }));
+export function calculateBatchHealthScores(results: HlrResult[]): { result: HlrResult; healthScore: number; qualityStatus: QualityStatus }[] {
+  return results.map(result => {
+    const healthScore = calculateHealthScore(result);
+    return {
+      result,
+      healthScore,
+      qualityStatus: classifyQualityByHealthScore(healthScore),
+    };
+  });
 }
 
 // Get phone numbers already checked in a batch (for resume functionality)
