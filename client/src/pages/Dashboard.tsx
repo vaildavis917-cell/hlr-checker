@@ -461,6 +461,8 @@ function AdminBatchesView() {
 // Batch results view with GSM codes
 function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?: string }) {
   const [qualityFilter, setQualityFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  const [sortColumn, setSortColumn] = useState<"healthScore" | "status" | "operator" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   
   const { data, isLoading } = trpc.admin.getBatchResults.useQuery({ 
     batchId, 
@@ -557,7 +559,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
   const lowQuality = data.results.filter((r: any) => (r.healthScore || 0) < 40).length;
   
   // Filter results by quality
-  const filteredResults = data.results.filter((r: any) => {
+  const filteredByQuality = data.results.filter((r: any) => {
     const score = r.healthScore || 0;
     if (qualityFilter === "all") return true;
     if (qualityFilter === "high") return score >= 60;
@@ -565,6 +567,52 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
     if (qualityFilter === "low") return score < 40;
     return true;
   });
+  
+  // Sort results
+  const filteredResults = [...filteredByQuality].sort((a: any, b: any) => {
+    if (!sortColumn) return 0;
+    
+    let aValue: any;
+    let bValue: any;
+    
+    switch (sortColumn) {
+      case "healthScore":
+        aValue = a.healthScore || 0;
+        bValue = b.healthScore || 0;
+        break;
+      case "status":
+        // Sort order: valid > unknown > invalid
+        const statusOrder: Record<string, number> = { valid: 3, unknown: 2, invalid: 1 };
+        aValue = statusOrder[a.validNumber] || 0;
+        bValue = statusOrder[b.validNumber] || 0;
+        break;
+      case "operator":
+        aValue = (a.currentCarrierName || "").toLowerCase();
+        bValue = (b.currentCarrierName || "").toLowerCase();
+        break;
+      default:
+        return 0;
+    }
+    
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+  
+  // Handle column header click for sorting
+  const handleSort = (column: "healthScore" | "status" | "operator") => {
+    if (sortColumn === column) {
+      // Toggle direction or reset
+      if (sortDirection === "desc") {
+        setSortDirection("asc");
+      } else {
+        setSortColumn(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -687,11 +735,41 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               <TableHead className="w-[140px]">Номер</TableHead>
-              <TableHead className="w-[100px]">Статус</TableHead>
-              <TableHead className="w-[120px]">Оператор</TableHead>
+              <TableHead 
+                className="w-[100px] cursor-pointer hover:bg-muted/50 select-none"
+                onClick={() => handleSort("status")}
+              >
+                <div className="flex items-center gap-1">
+                  Статус
+                  {sortColumn === "status" && (
+                    <span className="text-primary">{sortDirection === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="w-[120px] cursor-pointer hover:bg-muted/50 select-none"
+                onClick={() => handleSort("operator")}
+              >
+                <div className="flex items-center gap-1">
+                  Оператор
+                  {sortColumn === "operator" && (
+                    <span className="text-primary">{sortDirection === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </div>
+              </TableHead>
               <TableHead className="w-[60px]">Страна</TableHead>
               <TableHead className="w-[50px]">GSM</TableHead>
-              <TableHead className="w-[70px]">Качество</TableHead>
+              <TableHead 
+                className="w-[70px] cursor-pointer hover:bg-muted/50 select-none"
+                onClick={() => handleSort("healthScore")}
+              >
+                <div className="flex items-center gap-1">
+                  Качество
+                  {sortColumn === "healthScore" && (
+                    <span className="text-primary">{sortDirection === "desc" ? "↓" : "↑"}</span>
+                  )}
+                </div>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

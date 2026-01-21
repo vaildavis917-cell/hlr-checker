@@ -213,3 +213,8 @@
 
 ## Export Improvements
 - [x] Export filtered results to CSV (only numbers matching current quality filter)
+
+## Table Sorting
+- [x] Add sorting by Health Score column
+- [x] Add sorting by Status column
+- [x] Add sorting by Operator column
