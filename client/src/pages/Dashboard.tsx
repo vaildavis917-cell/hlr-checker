@@ -468,8 +468,11 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
     pageSize: 1000 
   });
 
-  const handleExportCSV = () => {
-    if (!data?.results || data.results.length === 0) {
+  // Export function that respects current filter
+  const handleExportCSV = (exportFiltered: boolean = false) => {
+    const resultsToExport = exportFiltered ? filteredResults : data?.results;
+    
+    if (!resultsToExport || resultsToExport.length === 0) {
       toast.error("Нет результатов для экспорта");
       return;
     }
@@ -489,36 +492,50 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
       "GSM код",
       "GSM сообщение",
       "Оценка качества",
+      "Уровень качества",
       "Дата проверки"
     ];
 
-    const rows = data.results.map((r: any) => [
-      r.phoneNumber,
-      r.internationalFormat || "",
-      r.validNumber || "",
-      r.reachable || "",
-      r.countryName || "",
-      r.countryCode || "",
-      r.currentCarrierName || "",
-      r.currentNetworkType || "",
-      r.originalCarrierName || "",
-      r.ported || "",
-      r.roaming || "",
-      r.gsmCode || "",
-      r.gsmMessage || "",
-      r.healthScore?.toString() || "",
-      r.createdAt ? new Date(r.createdAt).toLocaleString() : ""
-    ]);
+    const rows = resultsToExport.map((r: any) => {
+      const score = r.healthScore || 0;
+      const qualityLevel = score >= 60 ? "Высокое" : score >= 40 ? "Среднее" : "Низкое";
+      return [
+        r.phoneNumber,
+        r.internationalFormat || "",
+        r.validNumber || "",
+        r.reachable || "",
+        r.countryName || "",
+        r.countryCode || "",
+        r.currentCarrierName || "",
+        r.currentNetworkType || "",
+        r.originalCarrierName || "",
+        r.ported || "",
+        r.roaming || "",
+        r.gsmCode || "",
+        r.gsmMessage || "",
+        r.healthScore?.toString() || "",
+        qualityLevel,
+        r.createdAt ? new Date(r.createdAt).toLocaleString() : ""
+      ];
+    });
 
     const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
+    
+    // Add filter info to filename if filtered
+    const filterSuffix = exportFiltered && qualityFilter !== "all" ? `-${qualityFilter}` : "";
     a.href = url;
-    a.download = `hlr-report-${batchId}-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `hlr-report-${batchId}${filterSuffix}-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Отчёт экспортирован");
+    
+    const exportCount = resultsToExport.length;
+    const filterText = exportFiltered && qualityFilter !== "all" 
+      ? ` (фильтр: ${qualityFilter === "high" ? "высокое" : qualityFilter === "medium" ? "среднее" : "низкое"} качество)`
+      : "";
+    toast.success(`Экспортировано ${exportCount} номеров${filterText}`);
   };
 
   if (isLoading) {
@@ -650,11 +667,17 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
         </div>
       )}
 
-      {/* Export button */}
-      <div className="flex justify-end">
-        <Button onClick={handleExportCSV} variant="outline" size="sm">
+      {/* Export buttons */}
+      <div className="flex justify-end gap-2">
+        {qualityFilter !== "all" && (
+          <Button onClick={() => handleExportCSV(true)} variant="default" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            Экспорт отфильтрованных ({filteredResults.length})
+          </Button>
+        )}
+        <Button onClick={() => handleExportCSV(false)} variant="outline" size="sm">
           <Download className="h-4 w-4 mr-2" />
-          Экспорт CSV
+          Экспорт всех ({data.results.length})
         </Button>
       </div>
 

@@ -210,3 +210,6 @@
 ## UI Fix - Results Table
 - [x] Remove horizontal scrollbar from results table
 - [x] Make table responsive and fit all content without scrolling
+
+## Export Improvements
+- [x] Export filtered results to CSV (only numbers matching current quality filter)
