@@ -460,6 +460,8 @@ function AdminBatchesView() {
 
 // Batch results view with GSM codes
 function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?: string }) {
+  const [qualityFilter, setQualityFilter] = useState<"all" | "high" | "medium" | "low">("all");
+  
   const { data, isLoading } = trpc.admin.getBatchResults.useQuery({ 
     batchId, 
     page: 1, 
@@ -536,6 +538,16 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
   const highQuality = data.results.filter((r: any) => (r.healthScore || 0) >= 60).length;
   const mediumQuality = data.results.filter((r: any) => (r.healthScore || 0) >= 40 && (r.healthScore || 0) < 60).length;
   const lowQuality = data.results.filter((r: any) => (r.healthScore || 0) < 40).length;
+  
+  // Filter results by quality
+  const filteredResults = data.results.filter((r: any) => {
+    const score = r.healthScore || 0;
+    if (qualityFilter === "all") return true;
+    if (qualityFilter === "high") return score >= 60;
+    if (qualityFilter === "medium") return score >= 40 && score < 60;
+    if (qualityFilter === "low") return score < 40;
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -569,9 +581,12 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
           </Card>
         </div>
         
-        {/* Row 2: Quality based on Health Score */}
+        {/* Row 2: Quality based on Health Score - clickable for filtering */}
         <div className="grid grid-cols-3 gap-3">
-          <Card className="border-green-500/50 bg-green-500/5">
+          <Card 
+            className={`border-green-500/50 bg-green-500/5 cursor-pointer transition-all hover:scale-[1.02] ${qualityFilter === "high" ? "ring-2 ring-green-500" : ""}`}
+            onClick={() => setQualityFilter(qualityFilter === "high" ? "all" : "high")}
+          >
             <CardContent className="pt-3 pb-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -583,7 +598,10 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
               <p className="text-[9px] text-green-600/70 mt-1">Health Score ≥ 60</p>
             </CardContent>
           </Card>
-          <Card className="border-yellow-500/50 bg-yellow-500/5">
+          <Card 
+            className={`border-yellow-500/50 bg-yellow-500/5 cursor-pointer transition-all hover:scale-[1.02] ${qualityFilter === "medium" ? "ring-2 ring-yellow-500" : ""}`}
+            onClick={() => setQualityFilter(qualityFilter === "medium" ? "all" : "medium")}
+          >
             <CardContent className="pt-3 pb-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -595,7 +613,10 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
               <p className="text-[9px] text-yellow-600/70 mt-1">Health Score 40-59</p>
             </CardContent>
           </Card>
-          <Card className="border-red-500/50 bg-red-500/5">
+          <Card 
+            className={`border-red-500/50 bg-red-500/5 cursor-pointer transition-all hover:scale-[1.02] ${qualityFilter === "low" ? "ring-2 ring-red-500" : ""}`}
+            onClick={() => setQualityFilter(qualityFilter === "low" ? "all" : "low")}
+          >
             <CardContent className="pt-3 pb-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -609,6 +630,25 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
           </Card>
         </div>
       </div>
+      
+      {/* Filter indicator */}
+      {qualityFilter !== "all" && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Фильтр:</span>
+          <Badge 
+            variant="outline" 
+            className={`cursor-pointer ${
+              qualityFilter === "high" ? "border-green-500 text-green-500" :
+              qualityFilter === "medium" ? "border-yellow-500 text-yellow-500" :
+              "border-red-500 text-red-500"
+            }`}
+            onClick={() => setQualityFilter("all")}
+          >
+            {qualityFilter === "high" ? "Высокое" : qualityFilter === "medium" ? "Среднее" : "Низкое"} качество ×
+          </Badge>
+          <span className="text-muted-foreground">({filteredResults.length} из {data.results.length})</span>
+        </div>
+      )}
 
       {/* Export button */}
       <div className="flex justify-end">
@@ -632,7 +672,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.results.map((result: any) => {
+            {filteredResults.map((result: any) => {
               const healthScore = result.healthScore || 0;
               const qualityStatus = healthScore >= 60 ? "high" : healthScore >= 40 ? "medium" : "low";
               const qualityColor = qualityStatus === "high" ? "text-green-500" : qualityStatus === "medium" ? "text-yellow-500" : "text-red-500";
