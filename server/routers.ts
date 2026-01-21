@@ -591,9 +591,16 @@ export const appRouter = router({
           };
         }
 
+        // GSM codes 1, 5, 9, 12 indicate invalid numbers (Bad Number, Blocked)
+        const invalidGsmCodes = ["1", "5", "9", "12"];
+        const gsmCode = hlrResponse.gsm_code?.toString();
+        const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
+        const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
+        const isValid = finalValidNumber === "valid";
+
         // Calculate health score
         const mockResult = {
-          validNumber: hlrResponse.valid_number,
+          validNumber: finalValidNumber,
           reachable: hlrResponse.reachable,
           ported: hlrResponse.ported,
           roaming: hlrResponse.roaming,
@@ -608,8 +615,8 @@ export const appRouter = router({
           name: `Single: ${normalizedPhone}`,
           totalNumbers: 1,
           processedNumbers: 1,
-          validNumbers: hlrResponse.valid_number === "valid" ? 1 : 0,
-          invalidNumbers: hlrResponse.valid_number === "valid" ? 0 : 1,
+          validNumbers: isValid ? 1 : 0,
+          invalidNumbers: isValid ? 0 : 1,
           status: "completed",
         });
         
@@ -627,7 +634,7 @@ export const appRouter = router({
           currentNetworkType: hlrResponse.current_carrier?.network_type,
           originalCarrierName: hlrResponse.original_carrier?.name,
           originalCarrierCode: hlrResponse.original_carrier?.network_code,
-          validNumber: hlrResponse.valid_number,
+          validNumber: finalValidNumber,
           reachable: hlrResponse.reachable,
           ported: hlrResponse.ported,
           roaming: hlrResponse.roaming,
@@ -646,7 +653,7 @@ export const appRouter = router({
           countryName: hlrResponse.country_name,
           currentCarrier: hlrResponse.current_carrier?.name,
           networkType: hlrResponse.current_carrier?.network_type,
-          isValid: hlrResponse.valid_number === "valid",
+          isValid: isValid,
           isRoaming: hlrResponse.roaming === "true",
           isPorted: hlrResponse.ported === "true",
           reachable: hlrResponse.reachable,
@@ -793,7 +800,14 @@ export const appRouter = router({
             };
             invalidCount++;
           } else {
-            const isValid = hlrResponse.valid_number === "valid";
+            // GSM codes 1, 5, 9, 12 indicate invalid numbers (Bad Number, Blocked)
+            const invalidGsmCodes = ["1", "5", "9", "12"];
+            const gsmCode = hlrResponse.gsm_code?.toString();
+            const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
+            
+            // Override validNumber based on GSM code
+            const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
+            const isValid = finalValidNumber === "valid";
             if (isValid) validCount++;
             else invalidCount++;
 
@@ -811,7 +825,7 @@ export const appRouter = router({
               currentNetworkType: hlrResponse.current_carrier?.network_type,
               originalCarrierName: hlrResponse.original_carrier?.name,
               originalCarrierCode: hlrResponse.original_carrier?.network_code,
-              validNumber: hlrResponse.valid_number,
+              validNumber: finalValidNumber,
               reachable: hlrResponse.reachable,
               ported: hlrResponse.ported,
               roaming: hlrResponse.roaming,
@@ -1127,7 +1141,12 @@ export const appRouter = router({
             };
             invalidCount++;
           } else {
-            const isValid = hlrResponse.valid_number === "valid";
+            // GSM codes 1, 5, 9, 12 indicate invalid numbers (Bad Number, Blocked)
+            const invalidGsmCodes = ["1", "5", "9", "12"];
+            const gsmCode = hlrResponse.gsm_code?.toString();
+            const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
+            const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
+            const isValid = finalValidNumber === "valid";
             if (isValid) validCount++;
             else invalidCount++;
 
@@ -1145,7 +1164,7 @@ export const appRouter = router({
               currentNetworkType: hlrResponse.current_carrier?.network_type,
               originalCarrierName: hlrResponse.original_carrier?.name,
               originalCarrierCode: hlrResponse.original_carrier?.network_code,
-              validNumber: hlrResponse.valid_number,
+              validNumber: finalValidNumber,
               reachable: hlrResponse.reachable,
               ported: hlrResponse.ported,
               roaming: hlrResponse.roaming,

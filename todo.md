@@ -238,3 +238,6 @@
 ## GSM Display Fix
 - [x] Show both text status AND numeric GSM code (e.g. "Bad Number (1)")
 - [x] Add numeric GSM codes to Help Center table
+
+## Validity Status Fix
+- [x] Numbers with GSM codes 1, 5, 9, 12 (Bad Number, Blocked) should show as "invalid" status
