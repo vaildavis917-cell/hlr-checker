@@ -221,6 +221,7 @@
 
 ## UI Improvements - Dialog Size
 - [x] Increase results dialog size to fill more screen space
+- [x] Change dialog to fullscreen inline view (not modal overlay)
 
 ## Pagination
 - [x] Add pagination with page size selector (50/100/1000)

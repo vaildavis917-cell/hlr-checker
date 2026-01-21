@@ -235,6 +235,7 @@ function AdminBatchesView() {
   const [dateSort, setDateSort] = useState<string>("newest");
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [deletingBatchId, setDeletingBatchId] = useState<number | null>(null);
+  const [viewingBatch, setViewingBatch] = useState<{ id: number; name: string; userName: string } | null>(null);
   
   const utils = trpc.useUtils();
   const { data: allBatches, isLoading } = trpc.admin.listAllBatches.useQuery();
@@ -288,6 +289,30 @@ function AdminBatchesView() {
     return (
       <div className="text-center py-8 text-muted-foreground">
         {t.home.noChecksYet}
+      </div>
+    );
+  }
+
+  // If viewing a batch, show results inline instead of list
+  if (viewingBatch) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => setViewingBatch(null)}>
+            ← Назад
+          </Button>
+          <div>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              {t.adminHistory?.batchResults || "Результаты проверки"}: {viewingBatch.name}
+            </h3>
+            <p className="text-sm text-muted-foreground flex items-center gap-1">
+              <User className="h-3 w-3" />
+              {viewingBatch.userName}
+            </p>
+          </div>
+        </div>
+        <BatchResultsView batchId={viewingBatch.id} batchName={viewingBatch.name} />
       </div>
     );
   }
@@ -382,31 +407,18 @@ function AdminBatchesView() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => setSelectedBatchId(batch.id)}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          {t.view}
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="w-[98vw] max-w-[98vw] h-[95vh] max-h-[95vh] flex flex-col overflow-hidden">
-                        <DialogHeader>
-                          <DialogTitle className="flex items-center gap-2">
-                            <FileText className="h-5 w-5" />
-                            {t.adminHistory?.batchResults || "Отчёт"}: {batch.name || `Batch #${batch.id}`}
-                            <Badge variant="outline" className="ml-2">
-                              <User className="h-3 w-3 mr-1" />
-                              {batch.userName}
-                            </Badge>
-                          </DialogTitle>
-                        </DialogHeader>
-                        <BatchResultsView batchId={batch.id} batchName={batch.name} />
-                      </DialogContent>
-                    </Dialog>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setViewingBatch({ 
+                        id: batch.id, 
+                        name: batch.name || `Batch #${batch.id}`,
+                        userName: batch.userName 
+                      })}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      {t.view}
+                    </Button>
                     
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
