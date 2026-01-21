@@ -234,3 +234,7 @@
 - [x] Show GSM code (lookupOutcome) in results table
 - [x] Show detailed status (Bad Number, Absent Subscriber, etc.) in results
 - [x] Add GSM codes documentation to Help Center
+
+## GSM Display Fix
+- [x] Show both text status AND numeric GSM code (e.g. "Bad Number (1)")
+- [x] Add numeric GSM codes to Help Center table

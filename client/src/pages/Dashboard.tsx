@@ -852,7 +852,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
                           className="text-[10px] px-1 py-0 whitespace-nowrap"
                           title={GSM_CODES[result.gsmCode]?.meaning || result.gsmMessage}
                         >
-                          {GSM_CODES[result.gsmCode]?.shortLabel || `GSM ${result.gsmCode}`}
+                          {GSM_CODES[result.gsmCode]?.shortLabel || "Unknown"} ({result.gsmCode})
                         </Badge>
                       </div>
                     ) : (
