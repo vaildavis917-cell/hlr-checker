@@ -393,7 +393,7 @@ function AdminBatchesView() {
                           {t.view}
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                      <DialogContent className="w-[95vw] max-w-[1400px] h-[90vh] flex flex-col">
                         <DialogHeader>
                           <DialogTitle className="flex items-center gap-2">
                             <FileText className="h-5 w-5" />
@@ -463,6 +463,8 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
   const [qualityFilter, setQualityFilter] = useState<"all" | "high" | "medium" | "low">("all");
   const [sortColumn, setSortColumn] = useState<"healthScore" | "status" | "operator" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   
   const { data, isLoading } = trpc.admin.getBatchResults.useQuery({ 
     batchId, 
@@ -613,9 +615,26 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
       setSortDirection("desc");
     }
   };
+  
+  // Pagination
+  const totalPages = Math.ceil(filteredResults.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedResults = filteredResults.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filter or page size changes
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
+  
+  const handleFilterChange = (filter: "all" | "high" | "medium" | "low") => {
+    setQualityFilter(filter);
+    setCurrentPage(1);
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col flex-1 overflow-hidden space-y-4">
       {/* Stats summary - two rows */}
       <div className="space-y-3">
         {/* Row 1: Validity from API */}
@@ -650,7 +669,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
         <div className="grid grid-cols-3 gap-3">
           <Card 
             className={`border-green-500/50 bg-green-500/5 cursor-pointer transition-all hover:scale-[1.02] ${qualityFilter === "high" ? "ring-2 ring-green-500" : ""}`}
-            onClick={() => setQualityFilter(qualityFilter === "high" ? "all" : "high")}
+            onClick={() => handleFilterChange(qualityFilter === "high" ? "all" : "high")}
           >
             <CardContent className="pt-3 pb-2">
               <div className="flex items-center justify-between">
@@ -665,7 +684,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
           </Card>
           <Card 
             className={`border-yellow-500/50 bg-yellow-500/5 cursor-pointer transition-all hover:scale-[1.02] ${qualityFilter === "medium" ? "ring-2 ring-yellow-500" : ""}`}
-            onClick={() => setQualityFilter(qualityFilter === "medium" ? "all" : "medium")}
+            onClick={() => handleFilterChange(qualityFilter === "medium" ? "all" : "medium")}
           >
             <CardContent className="pt-3 pb-2">
               <div className="flex items-center justify-between">
@@ -680,7 +699,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
           </Card>
           <Card 
             className={`border-red-500/50 bg-red-500/5 cursor-pointer transition-all hover:scale-[1.02] ${qualityFilter === "low" ? "ring-2 ring-red-500" : ""}`}
-            onClick={() => setQualityFilter(qualityFilter === "low" ? "all" : "low")}
+            onClick={() => handleFilterChange(qualityFilter === "low" ? "all" : "low")}
           >
             <CardContent className="pt-3 pb-2">
               <div className="flex items-center justify-between">
@@ -773,7 +792,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredResults.map((result: any) => {
+            {paginatedResults.map((result: any) => {
               const healthScore = result.healthScore || 0;
               const qualityStatus = healthScore >= 60 ? "high" : healthScore >= 40 ? "medium" : "low";
               const qualityColor = qualityStatus === "high" ? "text-green-500" : qualityStatus === "medium" ? "text-yellow-500" : "text-red-500";
@@ -831,6 +850,64 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
             })}
           </TableBody>
         </Table>
+      </div>
+      
+      {/* Pagination controls */}
+      <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Показывать:</span>
+          <Select value={pageSize.toString()} onValueChange={(v) => handlePageSizeChange(Number(v))}>
+            <SelectTrigger className="w-[80px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+              <SelectItem value="1000">1000</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-sm text-muted-foreground">
+            {startIndex + 1}-{Math.min(endIndex, filteredResults.length)} из {filteredResults.length}
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+          >
+            «
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            ‹
+          </Button>
+          <span className="px-3 text-sm">
+            {currentPage} / {totalPages || 1}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage >= totalPages}
+          >
+            ›
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage >= totalPages}
+          >
+            »
+          </Button>
+        </div>
       </div>
     </div>
   );

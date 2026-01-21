@@ -218,3 +218,10 @@
 - [x] Add sorting by Health Score column
 - [x] Add sorting by Status column
 - [x] Add sorting by Operator column
+
+## UI Improvements - Dialog Size
+- [x] Increase results dialog size to fill more screen space
+
+## Pagination
+- [x] Add pagination with page size selector (50/100/1000)
+- [x] Add page navigation controls
