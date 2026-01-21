@@ -228,5 +228,4 @@
 - [x] Add page navigation controls
 
 ## Help Center Simplification
-- [ ] Remove technical/admin content from Help Center
-- [ ] Keep only basic user information (how to check numbers, what results mean)
+- [x] Simplify Help Center - remove technical info, keep only basic user guide

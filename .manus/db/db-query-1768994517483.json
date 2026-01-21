@@ -1,0 +1,16 @@
+{
+  "query": "SELECT username FROM users WHERE role = 'admin' LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3mPXLkQh9ex4hev.143b10ef28f1 --database CTMKJfJD4gB7m3trNQwmdb --execute SELECT username FROM users WHERE role = 'admin' LIMIT 3;",
+  "rows": [
+    {
+      "username": "IghorIT"
+    },
+    {
+      "username": "Nic"
+    }
+  ],
+  "messages": [],
+  "stdout": "username\nIghorIT\nNic\n",
+  "stderr": "",
+  "execution_time_ms": 65
+}
