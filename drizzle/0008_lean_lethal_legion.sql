@@ -1,0 +1,2 @@
+ALTER TABLE `users` MODIFY COLUMN `role` enum('user','admin','manager','viewer') NOT NULL DEFAULT 'user';--> statement-breakpoint
+ALTER TABLE `users` ADD `customPermissions` text;

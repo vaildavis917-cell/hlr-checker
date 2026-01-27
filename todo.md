@@ -241,3 +241,57 @@
 
 ## Validity Status Fix
 - [x] Numbers with GSM codes 1, 5, 9, 12 (Bad Number, Blocked) should show as "invalid" status
+
+## Major Features - Security & Reliability
+
+### Retry Logic
+- [x] Add retry mechanism for Seven.io API calls (3 attempts with exponential backoff)
+- [ ] Log retry attempts in action_logs
+
+### Graceful Shutdown
+- [x] Save batch processing state on server shutdown
+- [x] Resume interrupted batches on server restart
+
+### Auto-logout
+- [x] Add inactivity timeout (30 min default)
+- [x] Show warning before auto-logout
+- [x] Clear session on timeout
+
+### Sessions Management
+- [x] Create sessions table in database
+- [x] Track active sessions per user (device, IP, browser)
+- [x] UI to view active sessions
+- [x] Logout from specific session
+- [x] Logout from all sessions
+
+### Login History UI
+- [x] Create login history page for users
+- [x] Show: date, IP, browser, location, status
+- [x] Filter by action type
+- [ ] Admin can view any user's login history
+
+### Audit Actions UI
+- [x] Create audit log page for admin
+- [x] Show all user actions with filters
+- [x] Export audit log to CSV
+- [x] Search by user, action type, date
+
+### User Quotas Enhancement
+- [ ] Add weekly limits
+- [ ] Add per-batch limits
+- [ ] Quota usage notifications
+- [ ] Quota reset scheduling
+
+### Granular Roles
+- [ ] Create permissions table
+- [ ] Define permission types (view_batches, create_batches, export, admin_users, etc.)
+- [ ] Create roles table with permission sets
+- [ ] UI to manage roles and permissions
+- [ ] Assign roles to users
+
+### Redis Queue
+- [ ] Install and configure Redis
+- [ ] Create job queue for batch processing
+- [ ] Worker process for background jobs
+- [ ] Job status tracking
+- [ ] Priority queue support

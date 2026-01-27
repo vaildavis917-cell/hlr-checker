@@ -1,6 +1,6 @@
 import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -24,7 +24,7 @@ export async function createUser(data: {
   password: string;
   name?: string;
   email?: string;
-  role?: "user" | "admin";
+  role?: "user" | "admin" | "manager" | "viewer";
 }): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -260,7 +260,7 @@ export async function deleteUser(id: number): Promise<void> {
   await db.delete(users).where(eq(users.id, id));
 }
 
-export async function updateUserRole(id: number, role: "user" | "admin"): Promise<void> {
+export async function updateUserRole(id: number, role: "user" | "admin" | "manager" | "viewer"): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
@@ -354,13 +354,27 @@ export async function logAction(data: {
   });
 }
 
-export async function getActionLogs(userId?: number, limit: number = 100): Promise<ActionLog[]> {
+export async function getActionLogs(params: {
+  userId?: number;
+  actions?: string[];
+  limit?: number;
+} = {}): Promise<ActionLog[]> {
   const db = await getDb();
   if (!db) return [];
   
+  const { userId, actions, limit = 100 } = params;
+  const conditions = [];
+  
   if (userId) {
+    conditions.push(eq(actionLogs.userId, userId));
+  }
+  if (actions && actions.length > 0) {
+    conditions.push(inArray(actionLogs.action, actions));
+  }
+  
+  if (conditions.length > 0) {
     return await db.select().from(actionLogs)
-      .where(eq(actionLogs.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(actionLogs.createdAt))
       .limit(limit);
   }
@@ -370,18 +384,55 @@ export async function getActionLogs(userId?: number, limit: number = 100): Promi
     .limit(limit);
 }
 
+export async function countActionLogs(params: {
+  userId?: number;
+  actions?: string[];
+} = {}): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const { userId, actions } = params;
+  const conditions = [];
+  
+  if (userId) {
+    conditions.push(eq(actionLogs.userId, userId));
+  }
+  if (actions && actions.length > 0) {
+    conditions.push(inArray(actionLogs.action, actions));
+  }
+  
+  const result = conditions.length > 0
+    ? await db.select({ count: sql<number>`count(*)` }).from(actionLogs).where(and(...conditions))
+    : await db.select({ count: sql<number>`count(*)` }).from(actionLogs);
+  
+  return result[0]?.count || 0;
+}
+
+// Get ISO week number
+function getISOWeek(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+}
+
 // User limits management
-export async function checkUserLimits(userId: number, numbersCount: number): Promise<{ allowed: boolean; reason?: string }> {
+export async function checkUserLimits(userId: number, numbersCount: number): Promise<{ allowed: boolean; reason?: string; limits?: any }> {
   const db = await getDb();
   if (!db) return { allowed: true };
   
   const user = await getUserById(userId);
   if (!user) return { allowed: false, reason: "User not found" };
   
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const thisWeek = getISOWeek(now);
   const thisMonth = today.substring(0, 7);
   
   let checksToday = user.checksToday || 0;
+  let checksThisWeek = (user as any).checksThisWeek || 0;
   let checksThisMonth = user.checksThisMonth || 0;
   
   // Reset daily counter if new day
@@ -389,22 +440,64 @@ export async function checkUserLimits(userId: number, numbersCount: number): Pro
     checksToday = 0;
   }
   
+  // Reset weekly counter if new week
+  if ((user as any).lastCheckWeek !== thisWeek) {
+    checksThisWeek = 0;
+  }
+  
   // Reset monthly counter if new month
   if (user.lastCheckMonth !== thisMonth) {
     checksThisMonth = 0;
   }
   
+  // Check per-batch limit first
+  if ((user as any).batchLimit && numbersCount > (user as any).batchLimit) {
+    return { 
+      allowed: false, 
+      reason: `Batch limit exceeded. Max: ${(user as any).batchLimit} numbers per batch`,
+      limits: { batchLimit: (user as any).batchLimit }
+    };
+  }
+  
   // Check daily limit
   if (user.dailyLimit && checksToday + numbersCount > user.dailyLimit) {
-    return { allowed: false, reason: `Daily limit exceeded. Used: ${checksToday}/${user.dailyLimit}` };
+    return { 
+      allowed: false, 
+      reason: `Daily limit exceeded. Used: ${checksToday}/${user.dailyLimit}`,
+      limits: { dailyUsed: checksToday, dailyLimit: user.dailyLimit }
+    };
+  }
+  
+  // Check weekly limit
+  if ((user as any).weeklyLimit && checksThisWeek + numbersCount > (user as any).weeklyLimit) {
+    return { 
+      allowed: false, 
+      reason: `Weekly limit exceeded. Used: ${checksThisWeek}/${(user as any).weeklyLimit}`,
+      limits: { weeklyUsed: checksThisWeek, weeklyLimit: (user as any).weeklyLimit }
+    };
   }
   
   // Check monthly limit
   if (user.monthlyLimit && checksThisMonth + numbersCount > user.monthlyLimit) {
-    return { allowed: false, reason: `Monthly limit exceeded. Used: ${checksThisMonth}/${user.monthlyLimit}` };
+    return { 
+      allowed: false, 
+      reason: `Monthly limit exceeded. Used: ${checksThisMonth}/${user.monthlyLimit}`,
+      limits: { monthlyUsed: checksThisMonth, monthlyLimit: user.monthlyLimit }
+    };
   }
   
-  return { allowed: true };
+  return { 
+    allowed: true,
+    limits: {
+      dailyUsed: checksToday,
+      dailyLimit: user.dailyLimit,
+      weeklyUsed: checksThisWeek,
+      weeklyLimit: (user as any).weeklyLimit,
+      monthlyUsed: checksThisMonth,
+      monthlyLimit: user.monthlyLimit,
+      batchLimit: (user as any).batchLimit,
+    }
+  };
 }
 
 export async function incrementUserChecks(userId: number, count: number): Promise<void> {
@@ -414,15 +507,21 @@ export async function incrementUserChecks(userId: number, count: number): Promis
   const user = await getUserById(userId);
   if (!user) return;
   
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const thisWeek = getISOWeek(now);
   const thisMonth = today.substring(0, 7);
   
   let checksToday = user.checksToday || 0;
+  let checksThisWeek = (user as any).checksThisWeek || 0;
   let checksThisMonth = user.checksThisMonth || 0;
   
-  // Reset if new day/month
+  // Reset if new day/week/month
   if (user.lastCheckDate !== today) {
     checksToday = 0;
+  }
+  if ((user as any).lastCheckWeek !== thisWeek) {
+    checksThisWeek = 0;
   }
   if (user.lastCheckMonth !== thisMonth) {
     checksThisMonth = 0;
@@ -430,17 +529,27 @@ export async function incrementUserChecks(userId: number, count: number): Promis
   
   await db.update(users).set({
     checksToday: checksToday + count,
+    checksThisWeek: checksThisWeek + count,
     checksThisMonth: checksThisMonth + count,
     lastCheckDate: today,
+    lastCheckWeek: thisWeek,
     lastCheckMonth: thisMonth,
-  }).where(eq(users.id, userId));
+  } as any).where(eq(users.id, userId));
 }
 
-export async function updateUserLimits(userId: number, dailyLimit: number | null, monthlyLimit: number | null): Promise<void> {
+export async function updateUserLimits(
+  userId: number, 
+  limits: {
+    dailyLimit?: number | null;
+    weeklyLimit?: number | null;
+    monthlyLimit?: number | null;
+    batchLimit?: number | null;
+  }
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
-  await db.update(users).set({ dailyLimit, monthlyLimit }).where(eq(users.id, userId));
+  await db.update(users).set(limits as any).where(eq(users.id, userId));
 }
 
 export async function unlockUser(userId: number): Promise<void> {
@@ -803,4 +912,131 @@ export async function getAllPhoneNumbersInBatch(batchId: number): Promise<string
     .where(eq(hlrResults.batchId, batchId));
   
   return results.map(r => r.phoneNumber);
+}
+
+
+// Sessions management
+import crypto from "crypto";
+
+// Hash token for storage (we don't store raw tokens)
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+export async function createSession(data: {
+  userId: number;
+  token: string;
+  deviceInfo?: string;
+  browser?: string;
+  os?: string;
+  ipAddress?: string;
+  location?: string;
+  expiresAt: Date;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const tokenHash = hashToken(data.token);
+  
+  const result = await db.insert(sessions).values({
+    userId: data.userId,
+    tokenHash,
+    deviceInfo: data.deviceInfo || null,
+    browser: data.browser || null,
+    os: data.os || null,
+    ipAddress: data.ipAddress || null,
+    location: data.location || null,
+    isCurrent: "yes",
+    expiresAt: data.expiresAt,
+  });
+  
+  return result[0].insertId;
+}
+
+export async function getSessionByToken(token: string): Promise<Session | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const tokenHash = hashToken(token);
+  const result = await db.select().from(sessions)
+    .where(eq(sessions.tokenHash, tokenHash))
+    .limit(1);
+  
+  return result[0];
+}
+
+export async function getSessionsByUserId(userId: number): Promise<Session[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(sessions)
+    .where(eq(sessions.userId, userId))
+    .orderBy(desc(sessions.lastActivity));
+}
+
+export async function updateSessionActivity(token: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const tokenHash = hashToken(token);
+  await db.update(sessions)
+    .set({ lastActivity: new Date() })
+    .where(eq(sessions.tokenHash, tokenHash));
+}
+
+export async function deleteSession(sessionId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(sessions).where(eq(sessions.id, sessionId));
+}
+
+export async function deleteSessionByToken(token: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const tokenHash = hashToken(token);
+  await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
+}
+
+export async function deleteAllUserSessions(userId: number, exceptSessionId?: number): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  if (exceptSessionId) {
+    const result = await db.delete(sessions)
+      .where(and(
+        eq(sessions.userId, userId),
+        sql`${sessions.id} != ${exceptSessionId}`
+      ));
+    return result[0].affectedRows || 0;
+  } else {
+    const result = await db.delete(sessions)
+      .where(eq(sessions.userId, userId));
+    return result[0].affectedRows || 0;
+  }
+}
+
+export async function cleanupExpiredSessions(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.delete(sessions)
+    .where(sql`${sessions.expiresAt} < NOW()`);
+  
+  return result[0].affectedRows || 0;
+}
+
+export async function getActiveSessionCount(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(sessions)
+    .where(and(
+      eq(sessions.userId, userId),
+      sql`${sessions.expiresAt} > NOW()`
+    ));
+  
+  return result[0]?.count || 0;
 }

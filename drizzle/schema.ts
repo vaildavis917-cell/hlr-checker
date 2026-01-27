@@ -5,6 +5,26 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json } from "driz
  * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
+// Available permissions
+export const PERMISSIONS = [
+  'hlr.single',      // Single HLR check
+  'hlr.batch',       // Batch HLR check
+  'hlr.export',      // Export results
+  'hlr.history',     // View check history
+  'tools.duplicates', // Use duplicate removal tool
+  'admin.users',     // Manage users
+  'admin.audit',     // View audit logs
+  'admin.settings',  // Change system settings
+] as const;
+
+export type Permission = typeof PERMISSIONS[number];
+
+// Default permissions by role
+export const DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
+  user: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'tools.duplicates'],
+  admin: [...PERMISSIONS],
+};
+
 export const users = mysqlTable("users", {
   /**
    * Surrogate primary key. Auto-incremented numeric value managed by the database.
@@ -18,7 +38,9 @@ export const users = mysqlTable("users", {
   /** Display name */
   name: text("name"),
   email: varchar("email", { length: 320 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "manager", "viewer"]).default("user").notNull(),
+  /** Custom permissions JSON (overrides role defaults if set) */
+  customPermissions: text("customPermissions"),
   isActive: mysqlEnum("isActive", ["yes", "no"]).default("yes").notNull(),
   /** Failed login attempts counter */
   failedLoginAttempts: int("failedLoginAttempts").default(0).notNull(),
@@ -26,14 +48,22 @@ export const users = mysqlTable("users", {
   lockedUntil: timestamp("lockedUntil"),
   /** Daily check limit (null = unlimited) */
   dailyLimit: int("dailyLimit"),
+  /** Weekly check limit (null = unlimited) */
+  weeklyLimit: int("weeklyLimit"),
   /** Monthly check limit (null = unlimited) */
   monthlyLimit: int("monthlyLimit"),
+  /** Per-batch limit (null = unlimited) */
+  batchLimit: int("batchLimit"),
   /** Checks used today */
   checksToday: int("checksToday").default(0).notNull(),
+  /** Checks used this week */
+  checksThisWeek: int("checksThisWeek").default(0).notNull(),
   /** Checks used this month */
   checksThisMonth: int("checksThisMonth").default(0).notNull(),
   /** Last check date for daily reset */
   lastCheckDate: varchar("lastCheckDate", { length: 10 }),
+  /** Last check week for weekly reset (ISO week number) */
+  lastCheckWeek: varchar("lastCheckWeek", { length: 10 }),
   /** Last check month for monthly reset */
   lastCheckMonth: varchar("lastCheckMonth", { length: 7 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -162,3 +192,33 @@ export const exportTemplates = mysqlTable("export_templates", {
 
 export type ExportTemplate = typeof exportTemplates.$inferSelect;
 export type InsertExportTemplate = typeof exportTemplates.$inferInsert;
+
+/**
+ * User sessions - tracks active login sessions for each user
+ */
+export const sessions = mysqlTable("sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  /** JWT token hash for session identification */
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  /** Device/browser info */
+  deviceInfo: varchar("deviceInfo", { length: 255 }),
+  /** Browser name */
+  browser: varchar("browser", { length: 64 }),
+  /** Operating system */
+  os: varchar("os", { length: 64 }),
+  /** IP address */
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  /** Approximate location based on IP */
+  location: varchar("location", { length: 128 }),
+  /** Is this the current session */
+  isCurrent: mysqlEnum("isCurrent", ["yes", "no"]).default("no").notNull(),
+  /** Last activity timestamp */
+  lastActivity: timestamp("lastActivity").defaultNow().notNull(),
+  /** Session expiration time */
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = typeof sessions.$inferInsert;

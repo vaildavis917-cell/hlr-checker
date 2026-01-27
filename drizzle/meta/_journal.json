@@ -43,6 +43,27 @@
       "when": 1768480876773,
       "tag": "0005_dizzy_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1769516715659,
+      "tag": "0006_supreme_starfox",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1769517270885,
+      "tag": "0007_hesitant_boom_boom",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1769517382890,
+      "tag": "0008_lean_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

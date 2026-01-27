@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AutoLogoutProvider } from "./contexts/AutoLogoutContext";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
@@ -15,6 +16,9 @@ import Dashboard from "./pages/Dashboard";
 import HlrLookup from "./pages/HlrLookup";
 import SettingsPage from "./pages/Settings";
 import HelpCenter from "./pages/HelpCenter";
+import Sessions from "./pages/Sessions";
+import LoginHistory from "./pages/LoginHistory";
+import AuditLog from "./pages/AuditLog";
 
 function Router() {
   return (
@@ -31,6 +35,9 @@ function Router() {
       <Route path={"/statistics"} component={Statistics} />
       <Route path={"/tools"} component={Tools} />
       <Route path={"/help"} component={HelpCenter} />
+      <Route path={"/sessions"} component={Sessions} />
+      <Route path={"/login-history"} component={LoginHistory} />
+      <Route path={"/admin/audit"} component={AuditLog} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -45,8 +52,10 @@ function App() {
         switchable
       >
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <AutoLogoutProvider>
+            <Toaster />
+            <Router />
+          </AutoLogoutProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

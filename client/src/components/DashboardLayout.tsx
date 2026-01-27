@@ -33,7 +33,10 @@ import {
   Bell,
   Users,
   CreditCard,
-  Globe
+  Globe,
+  Shield,
+  History,
+  ClipboardList
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -44,7 +47,7 @@ import { Button } from "./ui/button";
 
 const SUPPORT_TELEGRAM = "https://t.me/toskaqwe1";
 
-const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) => {
+const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean, language: string) => {
   const items: Array<{icon: any, label: string, path: string, external?: boolean}> = [
     { icon: LayoutDashboard, label: t.nav.dashboard, path: "/dashboard" },
     { icon: Search, label: t.nav.hlrLookup, path: "/lookup" },
@@ -54,6 +57,7 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) 
   if (isAdmin) {
     items.push(
       { icon: Users, label: t.nav.users, path: "/admin" },
+      { icon: ClipboardList, label: language === "ru" ? "Аудит" : language === "uk" ? "Аудит" : "Audit", path: "/admin/audit" },
     );
   }
   
@@ -103,7 +107,7 @@ function DashboardLayoutContent({
   const [location, setLocation] = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const menuItems = getMenuItems(t, user?.role === "admin");
+  const menuItems = getMenuItems(t, user?.role === "admin", language);
   const isMobile = useIsMobile();
 
   return (
@@ -197,6 +201,27 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setLocation("/sessions")}
+                  className="cursor-pointer"
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  <span>{language === "ru" ? "Сессии" : language === "uk" ? "Сесії" : "Sessions"}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLocation("/login-history")}
+                  className="cursor-pointer"
+                >
+                  <History className="mr-2 h-4 w-4" />
+                  <span>{language === "ru" ? "История входов" : language === "uk" ? "Історія входів" : "Login History"}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLocation("/settings")}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>{t.nav.settings}</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

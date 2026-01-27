@@ -1,5 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { registerActiveBatch, updateBatchProgress, unregisterBatch, isShutdownInProgress } from "./_core/index";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
@@ -22,6 +23,7 @@ import {
   updateUserPassword,
   logAction,
   getActionLogs,
+  countActionLogs,
   checkUserLimits,
   incrementUserChecks,
   updateUserLimits,
@@ -44,6 +46,12 @@ import {
   getCachedResult,
   getCheckedPhoneNumbersInBatch,
   getIncompleteBatches,
+  createSession as createDbSession,
+  getSessionsByUserId,
+  deleteSession,
+  deleteAllUserSessions,
+  getSessionByToken,
+  updateSessionActivity,
 } from "./db";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
@@ -106,34 +114,91 @@ export const EXPORT_FIELDS = [
   { key: "errorMessage", label: "Error Message" },
 ] as const;
 
-// Function to perform HLR lookup via Seven.io API
-async function performHlrLookup(phoneNumber: string): Promise<SevenIoHlrResponse | { error: string }> {
+// Retry configuration
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  baseDelayMs: 1000, // 1 second
+  maxDelayMs: 10000, // 10 seconds
+};
+
+// Sleep helper
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Calculate exponential backoff delay
+function getRetryDelay(attempt: number): number {
+  const delay = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1);
+  // Add jitter (±20%)
+  const jitter = delay * 0.2 * (Math.random() - 0.5);
+  return Math.min(delay + jitter, RETRY_CONFIG.maxDelayMs);
+}
+
+// Check if error is retryable
+function isRetryableError(status: number): boolean {
+  // Retry on: 429 (rate limit), 500, 502, 503, 504 (server errors)
+  return status === 429 || (status >= 500 && status <= 504);
+}
+
+// Function to perform HLR lookup via Seven.io API with retry logic
+async function performHlrLookup(
+  phoneNumber: string,
+  onRetry?: (attempt: number, error: string, delayMs: number) => void
+): Promise<SevenIoHlrResponse | { error: string; retryAttempts?: number }> {
   const apiKey = process.env.SEVEN_IO_API_KEY;
   if (!apiKey) {
     return { error: "API key not configured" };
   }
 
-  try {
-    const response = await fetch(
-      `https://gateway.seven.io/api/lookup/hlr?number=${encodeURIComponent(phoneNumber)}`,
-      {
-        method: "GET",
-        headers: {
-          "X-Api-Key": apiKey,
-          "Accept": "application/json",
-        },
+  let lastError = "Unknown error";
+  
+  for (let attempt = 1; attempt <= RETRY_CONFIG.maxAttempts; attempt++) {
+    try {
+      const response = await fetch(
+        `https://gateway.seven.io/api/lookup/hlr?number=${encodeURIComponent(phoneNumber)}`,
+        {
+          method: "GET",
+          headers: {
+            "X-Api-Key": apiKey,
+            "Accept": "application/json",
+          },
+        }
+      );
+
+      // Success
+      if (response.ok) {
+        const data = await response.json();
+        return data as SevenIoHlrResponse;
       }
-    );
 
-    if (!response.ok) {
-      return { error: `API error: ${response.status} ${response.statusText}` };
+      // Non-retryable error
+      if (!isRetryableError(response.status)) {
+        return { error: `API error: ${response.status} ${response.statusText}` };
+      }
+
+      // Retryable error - prepare for retry
+      lastError = `API error: ${response.status} ${response.statusText}`;
+      
+      if (attempt < RETRY_CONFIG.maxAttempts) {
+        const delayMs = getRetryDelay(attempt);
+        onRetry?.(attempt, lastError, delayMs);
+        await sleep(delayMs);
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Unknown error";
+      
+      // Network errors are retryable
+      if (attempt < RETRY_CONFIG.maxAttempts) {
+        const delayMs = getRetryDelay(attempt);
+        onRetry?.(attempt, lastError, delayMs);
+        await sleep(delayMs);
+      }
     }
-
-    const data = await response.json();
-    return data as SevenIoHlrResponse;
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unknown error" };
   }
+
+  // All retries exhausted
+  return { 
+    error: `${lastError} (after ${RETRY_CONFIG.maxAttempts} attempts)`,
+    retryAttempts: RETRY_CONFIG.maxAttempts
+  };
 }
 
 // Detect duplicates in phone number list
@@ -160,9 +225,9 @@ function detectDuplicates(phoneNumbers: string[]): { unique: string[]; duplicate
   return { unique, duplicates };
 }
 
-// Admin-only procedure
+// Admin-only procedure (admin and manager roles)
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "manager") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
   }
   return next({ ctx });
@@ -182,7 +247,7 @@ const adminRouter = router({
       password: z.string().min(6).max(128),
       name: z.string().optional(),
       email: z.string().email().optional(),
-      role: z.enum(["user", "admin"]).default("user"),
+      role: z.enum(["user", "admin", "manager", "viewer"]).default("user"),
     }))
     .mutation(async ({ input }) => {
       // Check if username already exists
@@ -215,7 +280,7 @@ const adminRouter = router({
 
   // Update user role
   updateUserRole: adminProcedure
-    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
+    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin", "manager", "viewer"]) }))
     .mutation(async ({ ctx, input }) => {
       if (input.userId === ctx.user.id && input.role !== "admin") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot demote yourself" });
@@ -258,10 +323,17 @@ const adminRouter = router({
     .input(z.object({ 
       userId: z.number(), 
       dailyLimit: z.number().nullable(), 
-      monthlyLimit: z.number().nullable() 
+      monthlyLimit: z.number().nullable(),
+      weeklyLimit: z.number().nullable().optional(),
+      batchLimit: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      await updateUserLimits(input.userId, input.dailyLimit, input.monthlyLimit);
+      await updateUserLimits(input.userId, {
+        dailyLimit: input.dailyLimit,
+        weeklyLimit: input.weeklyLimit,
+        monthlyLimit: input.monthlyLimit,
+        batchLimit: input.batchLimit,
+      });
       await logAction({ userId: ctx.user.id, action: "update_limits", details: `Updated limits for user ${input.userId}` });
       return { success: true };
     }),
@@ -270,7 +342,7 @@ const adminRouter = router({
   getActionLogs: adminProcedure
     .input(z.object({ userId: z.number().optional(), limit: z.number().default(100) }))
     .query(async ({ input }) => {
-      return await getActionLogs(input.userId, input.limit);
+      return await getActionLogs({ userId: input.userId, limit: input.limit });
     }),
 
   // Get all statistics
@@ -436,7 +508,7 @@ export const appRouter = router({
         password: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const result = await login(input.username, input.password);
+        const result = await login(input.username, input.password, ctx.req);
         
         if (!result) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password" });
@@ -511,13 +583,100 @@ export const appRouter = router({
         });
 
         // Auto-login after setup
-        const result = await login(input.username, input.password);
+        const result = await login(input.username, input.password, ctx.req);
         if (result && 'token' in result) {
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
         }
 
         return { userId, success: true };
+      }),
+
+    // Get all sessions for current user
+    getSessions: protectedProcedure.query(async ({ ctx }) => {
+      const sessions = await getSessionsByUserId(ctx.user.id);
+      
+      // Get current session token from cookie
+      const currentToken = ctx.req.cookies?.[COOKIE_NAME];
+      const currentSession = currentToken ? await getSessionByToken(currentToken) : null;
+      
+      return sessions.map(s => ({
+        id: s.id,
+        deviceInfo: s.deviceInfo,
+        browser: s.browser,
+        os: s.os,
+        ipAddress: s.ipAddress,
+        location: s.location,
+        lastActivity: s.lastActivity,
+        createdAt: s.createdAt,
+        isCurrent: currentSession?.id === s.id,
+        isExpired: new Date(s.expiresAt) < new Date(),
+      }));
+    }),
+
+    // Terminate a specific session
+    terminateSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const sessions = await getSessionsByUserId(ctx.user.id);
+        const session = sessions.find(s => s.id === input.sessionId);
+        
+        if (!session) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+        }
+        
+        await deleteSession(input.sessionId);
+        
+        await logAction({
+          userId: ctx.user.id,
+          action: "terminate_session",
+          details: `Terminated session ${input.sessionId}`,
+          ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+          userAgent: ctx.req.headers["user-agent"],
+        });
+        
+        return { success: true };
+      }),
+
+    // Terminate all sessions except current
+    terminateAllSessions: protectedProcedure.mutation(async ({ ctx }) => {
+      const currentToken = ctx.req.cookies?.[COOKIE_NAME];
+      const currentSession = currentToken ? await getSessionByToken(currentToken) : null;
+      
+      const count = await deleteAllUserSessions(ctx.user.id, currentSession?.id);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "terminate_all_sessions",
+        details: `Terminated ${count} sessions`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true, terminatedCount: count };
+    }),
+
+    // Get login history for current user
+    getLoginHistory: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(500).default(50),
+        actionFilter: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const authActions = ["login", "logout", "login_failed", "password_change", "terminate_session", "terminate_all_sessions"];
+        
+        const logs = await getActionLogs({
+          userId: ctx.user.id,
+          actions: input.actionFilter ? [input.actionFilter] : authActions,
+          limit: input.limit,
+        });
+        
+        const total = await countActionLogs({
+          userId: ctx.user.id,
+          actions: input.actionFilter ? [input.actionFilter] : authActions,
+        });
+        
+        return { logs, total };
       }),
   }),
 
@@ -719,6 +878,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
         }
         
+        // Check if server is shutting down
+        if (isShutdownInProgress()) {
+          throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Server is shutting down. Please try again later." });
+        }
+        
         // Create batch record
         const batchId = await createHlrBatch({
           userId: ctx.user.id,
@@ -729,6 +893,9 @@ export const appRouter = router({
           invalidNumbers: 0,
           status: "processing",
         });
+        
+        // Register batch for graceful shutdown tracking
+        registerActiveBatch(batchId, numbersToCheck.length);
 
         // Process numbers - save each result IMMEDIATELY to prevent data loss
         let validCount = 0;
@@ -782,6 +949,26 @@ export const appRouter = router({
 
         // Then check remaining numbers via API
         for (let i = 0; i < numbersToActuallyCheck.length; i++) {
+          // Check for graceful shutdown - stop processing but keep batch resumable
+          if (isShutdownInProgress()) {
+            console.log(`[Batch ${batchId}] Shutdown detected, stopping at ${processedCount}/${numbersToCheck.length}`);
+            await updateHlrBatch(batchId, {
+              processedNumbers: processedCount,
+              validNumbers: validCount,
+              invalidNumbers: invalidCount,
+              // Keep status as "processing" so it can be resumed
+            });
+            unregisterBatch(batchId);
+            return {
+              batchId,
+              totalProcessed: processedCount,
+              fromCache: cachedUsed,
+              apiCalls: i,
+              interrupted: true,
+              message: "Batch interrupted due to server shutdown. You can resume it later.",
+            };
+          }
+          
           const phone = numbersToActuallyCheck[i];
           if (!phone) continue;
 
@@ -846,6 +1033,8 @@ export const appRouter = router({
               validNumbers: validCount,
               invalidNumbers: invalidCount,
             });
+            // Update graceful shutdown tracker
+            updateBatchProgress(batchId, processedCount);
           }
         }
 
@@ -857,6 +1046,9 @@ export const appRouter = router({
           invalidNumbers: invalidCount,
           completedAt: new Date(),
         });
+        
+        // Unregister from graceful shutdown tracker
+        unregisterBatch(batchId);
         
         // Increment user checks and log action (only count API calls, not cached)
         await incrementUserChecks(ctx.user.id, numbersToActuallyCheck.length);
@@ -1242,7 +1434,7 @@ export const appRouter = router({
     // Check API balance (admin only)
     getBalance: protectedProcedure.query(async ({ ctx }) => {
       // Only admins can see the balance
-      if (ctx.user.role !== "admin") {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "manager") {
         return { balance: null, currency: "EUR", restricted: true };
       }
       const apiKey = process.env.SEVEN_IO_API_KEY;

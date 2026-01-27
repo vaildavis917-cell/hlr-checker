@@ -65,10 +65,13 @@ type User = {
   username: string;
   name: string | null;
   email: string | null;
-  role: "user" | "admin";
+  role: "user" | "admin" | "manager" | "viewer";
   isActive: "yes" | "no";
   dailyLimit: number | null;
+  weeklyLimit?: number | null;
   monthlyLimit: number | null;
+  batchLimit?: number | null;
+  customPermissions?: string | null;
   createdAt: Date;
   updatedAt: Date;
   lastSignedIn: Date;
@@ -86,7 +89,7 @@ export default function Admin() {
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<"user" | "admin">("user");
+  const [newRole, setNewRole] = useState<"user" | "admin" | "manager" | "viewer">("user");
   
   // Limits dialog state
   const [isLimitsDialogOpen, setIsLimitsDialogOpen] = useState(false);
@@ -165,7 +168,7 @@ export default function Admin() {
     }
   };
 
-  const handleUpdateRole = async (userId: number, role: "user" | "admin") => {
+  const handleUpdateRole = async (userId: number, role: "user" | "admin" | "manager" | "viewer") => {
     if (userId === user?.id && role !== "admin") {
       toast.error(t.admin.cannotDemoteSelf);
       return;
