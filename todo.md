@@ -295,3 +295,8 @@
 - [ ] Worker process for background jobs
 - [ ] Job status tracking
 - [ ] Priority queue support
+
+## Access Control Fix
+- [x] Remove Sessions link from regular user menu (admin only)
+- [x] Remove Login History link from regular user menu (admin only)
+- [x] Add admin check on /sessions and /login-history routes

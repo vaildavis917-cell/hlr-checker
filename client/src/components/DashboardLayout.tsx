@@ -201,20 +201,24 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => setLocation("/sessions")}
-                  className="cursor-pointer"
-                >
-                  <Shield className="mr-2 h-4 w-4" />
-                  <span>{language === "ru" ? "Сессии" : language === "uk" ? "Сесії" : "Sessions"}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setLocation("/login-history")}
-                  className="cursor-pointer"
-                >
-                  <History className="mr-2 h-4 w-4" />
-                  <span>{language === "ru" ? "История входов" : language === "uk" ? "Історія входів" : "Login History"}</span>
-                </DropdownMenuItem>
+                {user?.role === "admin" && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => setLocation("/sessions")}
+                      className="cursor-pointer"
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>{language === "ru" ? "Сессии" : language === "uk" ? "Сесії" : "Sessions"}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setLocation("/login-history")}
+                      className="cursor-pointer"
+                    >
+                      <History className="mr-2 h-4 w-4" />
+                      <span>{language === "ru" ? "История входов" : language === "uk" ? "Історія входів" : "Login History"}</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem
                   onClick={() => setLocation("/settings")}
                   className="cursor-pointer"

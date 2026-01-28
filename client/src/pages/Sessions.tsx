@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useLocation } from "wouter";
 
 const translations = {
   ru: {
@@ -249,8 +250,15 @@ function SessionCard({ session, t, language, onTerminate, isTerminating }: Sessi
 export default function Sessions() {
   const { language } = useLanguage();
   const t = translations[language] || translations.en;
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
+  
+  // Redirect non-admin users
+  if (!loading && user && user.role !== "admin") {
+    setLocation("/dashboard");
+    return null;
+  }
   
   const { data: sessions, isLoading } = trpc.auth.getSessions.useQuery(undefined, {
     enabled: !!user,

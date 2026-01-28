@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { History, Search, Filter, Globe, Monitor, CheckCircle, XCircle, AlertTriangle, Loader2 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useLocation } from "wouter";
 
 const translations = {
   ru: {
@@ -162,7 +163,14 @@ function formatDate(date: Date | string, language: string): string {
 export default function LoginHistory() {
   const { language } = useLanguage();
   const t = translations[language] || translations.en;
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  
+  // Redirect non-admin users
+  if (!loading && user && user.role !== "admin") {
+    setLocation("/dashboard");
+    return null;
+  }
   
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [ipSearch, setIpSearch] = useState("");
