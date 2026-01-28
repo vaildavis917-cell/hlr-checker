@@ -283,11 +283,11 @@
 - [ ] Quota reset scheduling
 
 ### Granular Roles
-- [ ] Create permissions table
-- [ ] Define permission types (view_batches, create_batches, export, admin_users, etc.)
-- [ ] Create roles table with permission sets
-- [ ] UI to manage roles and permissions
-- [ ] Assign roles to users
+- [x] Create permissions table (role_permissions)
+- [x] Define permission types (hlr.single, hlr.batch, hlr.export, admin.users, etc.)
+- [x] Create roles table with permission sets (DEFAULT_PERMISSIONS)
+- [x] UI to manage roles and permissions
+- [x] Assign roles to users
 
 ### Redis Queue
 - [ ] Install and configure Redis
@@ -308,3 +308,11 @@
 ## Quotas UI
 - [x] UI для отображения квот пользователя (оставшиеся лимиты)
 - [x] Алерты при приближении к лимитам (80% warning)
+
+## Permissions System
+- [x] Создать таблицу role_permissions в БД
+- [x] Определить типы разрешений (hlr.single, hlr.batch, hlr.export, admin.users, etc.)
+- [x] Backend API для получения и обновления permissions
+- [x] UI для настройки permissions в админ-панели
+- [x] Интегрировать проверку permissions в существующие процедуры
+- [x] Переводы для permissions (RU/UK/EN)

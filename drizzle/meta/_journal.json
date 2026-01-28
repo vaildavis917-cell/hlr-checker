@@ -64,6 +64,13 @@
       "when": 1769517382890,
       "tag": "0008_lean_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1769617192756,
+      "tag": "0009_eager_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

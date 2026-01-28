@@ -5,23 +5,53 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json } from "driz
  * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
-// Available permissions
+// Available permissions with descriptions
 export const PERMISSIONS = [
-  'hlr.single',      // Single HLR check
-  'hlr.batch',       // Batch HLR check
-  'hlr.export',      // Export results
-  'hlr.history',     // View check history
+  'hlr.single',       // Single HLR check
+  'hlr.batch',        // Batch HLR check
+  'hlr.export',       // Export results
+  'hlr.history',      // View check history
+  'hlr.delete',       // Delete batches
   'tools.duplicates', // Use duplicate removal tool
-  'admin.users',     // Manage users
-  'admin.audit',     // View audit logs
-  'admin.settings',  // Change system settings
+  'admin.users',      // Manage users
+  'admin.users.create', // Create new users
+  'admin.users.edit',   // Edit user settings
+  'admin.users.delete', // Delete users
+  'admin.users.limits', // Set user limits
+  'admin.audit',      // View audit logs
+  'admin.sessions',   // View/manage sessions
+  'admin.balance',    // View API balance
+  'admin.settings',   // Change system settings
+  'admin.permissions', // Manage role permissions
 ] as const;
 
 export type Permission = typeof PERMISSIONS[number];
 
+// Permission descriptions for UI
+export const PERMISSION_DESCRIPTIONS: Record<Permission, { en: string; ru: string; uk: string }> = {
+  'hlr.single': { en: 'Single HLR Check', ru: 'Одиночная HLR проверка', uk: 'Одинична HLR перевірка' },
+  'hlr.batch': { en: 'Batch HLR Check', ru: 'Пакетная HLR проверка', uk: 'Пакетна HLR перевірка' },
+  'hlr.export': { en: 'Export Results', ru: 'Экспорт результатов', uk: 'Експорт результатів' },
+  'hlr.history': { en: 'View Check History', ru: 'Просмотр истории', uk: 'Перегляд історії' },
+  'hlr.delete': { en: 'Delete Batches', ru: 'Удаление партий', uk: 'Видалення партій' },
+  'tools.duplicates': { en: 'Duplicate Removal Tool', ru: 'Инструмент удаления дубликатов', uk: 'Інструмент видалення дублікатів' },
+  'admin.users': { en: 'View Users', ru: 'Просмотр пользователей', uk: 'Перегляд користувачів' },
+  'admin.users.create': { en: 'Create Users', ru: 'Создание пользователей', uk: 'Створення користувачів' },
+  'admin.users.edit': { en: 'Edit Users', ru: 'Редактирование пользователей', uk: 'Редагування користувачів' },
+  'admin.users.delete': { en: 'Delete Users', ru: 'Удаление пользователей', uk: 'Видалення користувачів' },
+  'admin.users.limits': { en: 'Set User Limits', ru: 'Установка лимитов', uk: 'Встановлення лімітів' },
+  'admin.audit': { en: 'View Audit Logs', ru: 'Просмотр журнала аудита', uk: 'Перегляд журналу аудиту' },
+  'admin.sessions': { en: 'Manage Sessions', ru: 'Управление сессиями', uk: 'Управління сесіями' },
+  'admin.balance': { en: 'View API Balance', ru: 'Просмотр баланса API', uk: 'Перегляд балансу API' },
+  'admin.settings': { en: 'System Settings', ru: 'Системные настройки', uk: 'Системні налаштування' },
+  'admin.permissions': { en: 'Manage Permissions', ru: 'Управление правами', uk: 'Управління правами' },
+};
+
 // Default permissions by role
 export const DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
+  viewer: ['hlr.history'],
   user: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'tools.duplicates'],
+  manager: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'hlr.delete', 'tools.duplicates', 'admin.users', 'admin.audit', 'admin.sessions'],
   admin: [...PERMISSIONS],
 };
 
@@ -222,3 +252,23 @@ export const sessions = mysqlTable("sessions", {
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
+
+
+/**
+ * Role permissions - stores custom permission sets for each role
+ * If a role has an entry here, it overrides DEFAULT_PERMISSIONS
+ */
+export const rolePermissions = mysqlTable("role_permissions", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Role name (viewer, user, manager, admin) */
+  role: varchar("role", { length: 32 }).notNull().unique(),
+  /** JSON array of permission strings */
+  permissions: json("permissions").$type<Permission[]>().notNull(),
+  /** Description of the role */
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type InsertRolePermission = typeof rolePermissions.$inferInsert;

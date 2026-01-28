@@ -52,10 +52,16 @@ import {
   deleteAllUserSessions,
   getSessionByToken,
   updateSessionActivity,
+  getRolePermissions,
+  getAllRolePermissions,
+  setRolePermissions,
+  getUserEffectivePermissions,
+  setUserCustomPermissions,
+  userHasPermission,
 } from "./db";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
-import { InsertHlrResult } from "../drizzle/schema";
+import { InsertHlrResult, PERMISSIONS, PERMISSION_DESCRIPTIONS, DEFAULT_PERMISSIONS, Permission } from "../drizzle/schema";
 import { analyzeBatch, normalizePhoneNumber } from "./phoneUtils";
 import * as XLSX from "xlsx";
 
@@ -423,6 +429,115 @@ const adminRouter = router({
       });
       return { success: true };
     }),
+
+  // =====================
+  // Permissions Management
+  // =====================
+
+  // Get all available permissions
+  getAvailablePermissions: adminProcedure.query(() => {
+    return {
+      permissions: PERMISSIONS,
+      descriptions: PERMISSION_DESCRIPTIONS,
+      defaults: DEFAULT_PERMISSIONS,
+    };
+  }),
+
+  // Get all role permissions (custom + defaults)
+  getAllRolePermissions: adminProcedure.query(async () => {
+    const customPermissions = await getAllRolePermissions();
+    const roles = ['viewer', 'user', 'manager', 'admin'];
+    
+    return roles.map(role => {
+      const custom = customPermissions.find(p => p.role === role);
+      return {
+        role,
+        permissions: custom?.permissions || DEFAULT_PERMISSIONS[role] || [],
+        description: custom?.description || null,
+        isCustom: !!custom,
+      };
+    });
+  }),
+
+  // Get permissions for a specific role
+  getRolePermissions: adminProcedure
+    .input(z.object({ role: z.string() }))
+    .query(async ({ input }) => {
+      const permissions = await getRolePermissions(input.role);
+      return { role: input.role, permissions };
+    }),
+
+  // Update permissions for a role
+  setRolePermissions: adminProcedure
+    .input(z.object({
+      role: z.string(),
+      permissions: z.array(z.string()),
+      description: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Validate permissions
+      const validPermissions = input.permissions.filter(p => 
+        PERMISSIONS.includes(p as Permission)
+      ) as Permission[];
+      
+      await setRolePermissions(input.role, validPermissions, input.description);
+      await logAction({
+        userId: ctx.user.id,
+        action: "update_role_permissions",
+        details: `Updated permissions for role '${input.role}': ${validPermissions.join(', ')}`,
+      });
+      return { success: true };
+    }),
+
+  // Reset role permissions to defaults
+  resetRolePermissions: adminProcedure
+    .input(z.object({ role: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { deleteRolePermissions } = await import("./db");
+      await deleteRolePermissions(input.role);
+      await logAction({
+        userId: ctx.user.id,
+        action: "reset_role_permissions",
+        details: `Reset permissions for role '${input.role}' to defaults`,
+      });
+      return { success: true, defaults: DEFAULT_PERMISSIONS[input.role] || [] };
+    }),
+
+  // Get user's effective permissions
+  getUserPermissions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const permissions = await getUserEffectivePermissions(input.userId);
+      return { userId: input.userId, permissions };
+    }),
+
+  // Set custom permissions for a user (overrides role)
+  setUserCustomPermissions: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      permissions: z.array(z.string()).nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.permissions) {
+        const validPermissions = input.permissions.filter(p => 
+          PERMISSIONS.includes(p as Permission)
+        ) as Permission[];
+        await setUserCustomPermissions(input.userId, validPermissions);
+        await logAction({
+          userId: ctx.user.id,
+          action: "set_user_permissions",
+          details: `Set custom permissions for user #${input.userId}: ${validPermissions.join(', ')}`,
+        });
+      } else {
+        await setUserCustomPermissions(input.userId, null);
+        await logAction({
+          userId: ctx.user.id,
+          action: "clear_user_permissions",
+          details: `Cleared custom permissions for user #${input.userId}, now using role defaults`,
+        });
+      }
+      return { success: true };
+    }),
 });
 
 // Export templates router
@@ -702,6 +817,12 @@ export const appRouter = router({
     checkSingle: protectedProcedure
       .input(z.object({ phoneNumber: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasPermission = await userHasPermission(ctx.user.id, 'hlr.single');
+        if (!hasPermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to perform HLR checks" });
+        }
+        
         const normalizedPhone = input.phoneNumber.trim();
         
         // Check cache first (24 hours)
@@ -831,7 +952,7 @@ export const appRouter = router({
         return analysis;
       }),
 
-    // Start a new HLR batch check
+    // Start batch HLR check
     startBatch: protectedProcedure
       .input(z.object({
         name: z.string().optional(),
@@ -840,6 +961,12 @@ export const appRouter = router({
         skipInvalid: z.boolean().default(true), // Skip invalid format numbers
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasPermission = await userHasPermission(ctx.user.id, 'hlr.batch');
+        if (!hasPermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to perform batch HLR checks" });
+        }
+        
         let { phoneNumbers } = input;
         
         // Analyze and normalize numbers
@@ -1078,6 +1205,11 @@ export const appRouter = router({
 
     // Get all batches for current user
     listBatches: protectedProcedure.query(async ({ ctx }) => {
+      // Check permission
+      const hasPermission = await userHasPermission(ctx.user.id, 'hlr.history');
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to view check history" });
+      }
       return await getHlrBatchesByUserId(ctx.user.id);
     }),
 
@@ -1119,6 +1251,12 @@ export const appRouter = router({
         fields: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasExportPermission = await userHasPermission(ctx.user.id, 'hlr.export');
+        if (!hasExportPermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to export results" });
+        }
+        
         const batch = await getHlrBatchById(input.batchId);
         if (!batch || batch.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
@@ -1405,11 +1543,18 @@ export const appRouter = router({
     deleteBatch: protectedProcedure
       .input(z.object({ batchId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasDeletePermission = await userHasPermission(ctx.user.id, 'hlr.delete');
+        if (!hasDeletePermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to delete batches" });
+        }
+        
         const batch = await getHlrBatchById(input.batchId);
         if (!batch || batch.userId !== ctx.user.id) {
-          throw new Error("Batch not found or access denied");
+          throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found or access denied" });
         }
         await deleteHlrBatch(input.batchId);
+        await logAction({ userId: ctx.user.id, action: "delete_batch", details: `Deleted batch ${input.batchId}` });
         return { success: true };
       }),
 

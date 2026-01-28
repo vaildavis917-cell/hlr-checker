@@ -19,6 +19,7 @@ import HelpCenter from "./pages/HelpCenter";
 import Sessions from "./pages/Sessions";
 import LoginHistory from "./pages/LoginHistory";
 import AuditLog from "./pages/AuditLog";
+import Permissions from "./pages/Permissions";
 
 function Router() {
   return (
@@ -38,6 +39,7 @@ function Router() {
       <Route path={"/sessions"} component={Sessions} />
       <Route path={"/login-history"} component={LoginHistory} />
       <Route path={"/admin/audit"} component={AuditLog} />
+      <Route path={"/admin/permissions"} component={Permissions} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

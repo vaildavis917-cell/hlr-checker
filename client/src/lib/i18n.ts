@@ -331,6 +331,22 @@ const translations = {
       enterNewPassword: "Введите новый пароль для",
     },
     
+    // Permissions page
+    permissions: {
+      title: "Управление правами",
+      description: "Настройка прав доступа для каждой роли",
+      permissionsCount: "разрешений",
+      custom: "Изменено",
+      resetToDefault: "Сбросить",
+      noPermissions: "Нет разрешений",
+      editRole: "Редактирование прав",
+      editRoleDesc: "Выберите разрешения для этой роли",
+      saved: "Права сохранены",
+      saveError: "Ошибка сохранения",
+      reset: "Права сброшены к значениям по умолчанию",
+      resetError: "Ошибка сброса",
+    },
+    
     // Admin History page
     adminHistory: {
       title: "История всех пользователей",
@@ -726,6 +742,22 @@ const translations = {
       enterNewPassword: "Введіть новий пароль для",
     },
     
+    // Permissions page
+    permissions: {
+      title: "Управління правами",
+      description: "Налаштування прав доступу для кожної ролі",
+      permissionsCount: "дозволів",
+      custom: "Змінено",
+      resetToDefault: "Скинути",
+      noPermissions: "Немає дозволів",
+      editRole: "Редагування прав",
+      editRoleDesc: "Виберіть дозволи для цієї ролі",
+      saved: "Права збережено",
+      saveError: "Помилка збереження",
+      reset: "Права скинуто до значень за замовчуванням",
+      resetError: "Помилка скидання",
+    },
+    
     // Admin History page
     adminHistory: {
       title: "Історія всіх користувачів",
@@ -1119,6 +1151,22 @@ const translations = {
       cannotDeactivateSelf: "Cannot deactivate yourself",
       usernameExists: "Username already exists",
       enterNewPassword: "Enter new password for",
+    },
+    
+    // Permissions page
+    permissions: {
+      title: "Permissions Management",
+      description: "Configure access permissions for each role",
+      permissionsCount: "permissions",
+      custom: "Modified",
+      resetToDefault: "Reset",
+      noPermissions: "No permissions",
+      editRole: "Edit Permissions",
+      editRoleDesc: "Select permissions for this role",
+      saved: "Permissions saved",
+      saveError: "Error saving",
+      reset: "Permissions reset to defaults",
+      resetError: "Error resetting",
     },
     
     // Admin History page

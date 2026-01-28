@@ -1040,3 +1040,104 @@ export async function getActiveSessionCount(userId: number): Promise<number> {
   
   return result[0]?.count || 0;
 }
+
+
+// =====================
+// Role Permissions
+// =====================
+
+import { rolePermissions, RolePermission, InsertRolePermission, Permission, DEFAULT_PERMISSIONS } from "../drizzle/schema";
+
+export async function getRolePermissions(role: string): Promise<Permission[]> {
+  const db = await getDb();
+  // If no database, return default permissions (for tests)
+  if (!db) {
+    return DEFAULT_PERMISSIONS[role] || [];
+  }
+  
+  const result = await db.select()
+    .from(rolePermissions)
+    .where(eq(rolePermissions.role, role))
+    .limit(1);
+  
+  if (result[0]) {
+    return result[0].permissions;
+  }
+  
+  // Return default permissions if no custom permissions set
+  return DEFAULT_PERMISSIONS[role] || [];
+}
+
+export async function getAllRolePermissions(): Promise<RolePermission[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(rolePermissions).orderBy(rolePermissions.role);
+}
+
+export async function setRolePermissions(role: string, permissions: Permission[], description?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Check if role already exists
+  const existing = await db.select()
+    .from(rolePermissions)
+    .where(eq(rolePermissions.role, role))
+    .limit(1);
+  
+  if (existing[0]) {
+    // Update existing
+    await db.update(rolePermissions)
+      .set({ permissions, description })
+      .where(eq(rolePermissions.role, role));
+  } else {
+    // Insert new
+    await db.insert(rolePermissions).values({
+      role,
+      permissions,
+      description,
+    });
+  }
+}
+
+export async function deleteRolePermissions(role: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(rolePermissions).where(eq(rolePermissions.role, role));
+}
+
+// Get effective permissions for a user (considering custom permissions)
+export async function getUserEffectivePermissions(userId: number): Promise<Permission[]> {
+  const user = await getUserById(userId);
+  // If no user found (e.g., in tests without DB), return default user permissions
+  if (!user) return DEFAULT_PERMISSIONS['user'] || [];
+  
+  // If user has custom permissions, use those
+  if (user.customPermissions) {
+    try {
+      return JSON.parse(user.customPermissions) as Permission[];
+    } catch {
+      // Fall through to role permissions
+    }
+  }
+  
+  // Get role permissions
+  return await getRolePermissions(user.role);
+}
+
+// Check if user has a specific permission
+export async function userHasPermission(userId: number, permission: Permission): Promise<boolean> {
+  const permissions = await getUserEffectivePermissions(userId);
+  return permissions.includes(permission);
+}
+
+// Set custom permissions for a user (overrides role permissions)
+export async function setUserCustomPermissions(userId: number, permissions: Permission[] | null): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(users)
+    .set({ customPermissions: permissions ? JSON.stringify(permissions) : null })
+    .where(eq(users.id, userId));
+}

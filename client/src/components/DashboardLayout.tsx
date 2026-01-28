@@ -36,7 +36,8 @@ import {
   Globe,
   Shield,
   History,
-  ClipboardList
+  ClipboardList,
+  Key
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -57,6 +58,7 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean, 
   if (isAdmin) {
     items.push(
       { icon: Users, label: t.nav.users, path: "/admin" },
+      { icon: Key, label: t.permissions?.title || (language === "ru" ? "Права" : language === "uk" ? "Права" : "Permissions"), path: "/admin/permissions" },
       { icon: ClipboardList, label: language === "ru" ? "Аудит" : language === "uk" ? "Аудит" : "Audit", path: "/admin/audit" },
     );
   }
