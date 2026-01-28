@@ -277,9 +277,9 @@
 - [x] Search by user, action type, date
 
 ### User Quotas Enhancement
-- [ ] Add weekly limits
-- [ ] Add per-batch limits
-- [ ] Quota usage notifications
+- [x] Add weekly limits
+- [x] Add per-batch limits
+- [x] Quota usage notifications (warning at 80%)
 - [ ] Quota reset scheduling
 
 ### Granular Roles
@@ -300,3 +300,11 @@
 - [x] Remove Sessions link from regular user menu (admin only)
 - [x] Remove Login History link from regular user menu (admin only)
 - [x] Add admin check on /sessions and /login-history routes
+
+## Granular Roles UI
+- [x] UI для настройки permissions ролей в админ-панели (4 роли: viewer, user, manager, admin)
+- [ ] Отображение роли и её возможностей в профиле
+
+## Quotas UI
+- [x] UI для отображения квот пользователя (оставшиеся лимиты)
+- [x] Алерты при приближении к лимитам (80% warning)

@@ -511,19 +511,19 @@ export default function Home() {
                   <span className="text-sm font-medium">{t.home.dailyUsage || "Сегодня"}</span>
                   <span className="text-sm text-muted-foreground">
                     {userStatsQuery.data.checksToday}
-                    {userStatsQuery.data.limits.dailyLimit > 0 
+                    {(userStatsQuery.data.limits.dailyLimit ?? 0) > 0 
                       ? ` / ${userStatsQuery.data.limits.dailyLimit}`
                       : ` (${t.home.unlimited || "без лимита"})`
                     }
                   </span>
                 </div>
-                {userStatsQuery.data.limits.dailyLimit > 0 ? (
+                {(userStatsQuery.data.limits.dailyLimit ?? 0) > 0 ? (
                   <>
                     <Progress 
-                      value={(userStatsQuery.data.checksToday / userStatsQuery.data.limits.dailyLimit) * 100} 
-                      className={`h-2 ${userStatsQuery.data.checksToday >= userStatsQuery.data.limits.dailyLimit ? '[&>div]:bg-red-500' : ''}`}
+                      value={(userStatsQuery.data.checksToday / (userStatsQuery.data.limits.dailyLimit ?? 1)) * 100} 
+                      className={`h-2 ${userStatsQuery.data.checksToday >= (userStatsQuery.data.limits.dailyLimit ?? 0) ? '[&>div]:bg-red-500' : ''}`}
                     />
-                    {userStatsQuery.data.checksToday >= userStatsQuery.data.limits.dailyLimit && (
+                    {userStatsQuery.data.checksToday >= (userStatsQuery.data.limits.dailyLimit ?? 0) && (
                       <div className="flex items-center gap-2 text-red-500 text-sm">
                         <AlertCircle className="h-4 w-4" />
                         {t.home.dailyLimitReached || "Дневной лимит исчерпан"}
@@ -535,25 +535,47 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Weekly Limit */}
+              {(userStatsQuery.data.limits.weeklyLimit ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{t.home.weeklyUsage || "На этой неделе"}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {userStatsQuery.data.checksThisWeek} / {userStatsQuery.data.limits.weeklyLimit}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(userStatsQuery.data.checksThisWeek / (userStatsQuery.data.limits.weeklyLimit ?? 1)) * 100} 
+                    className={`h-2 ${userStatsQuery.data.checksThisWeek >= (userStatsQuery.data.limits.weeklyLimit ?? 0) ? '[&>div]:bg-red-500' : ''}`}
+                  />
+                  {userStatsQuery.data.checksThisWeek >= (userStatsQuery.data.limits.weeklyLimit ?? 0) && (
+                    <div className="flex items-center gap-2 text-red-500 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      {t.home.weeklyLimitReached || "Недельный лимит исчерпан"}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Monthly Limit */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">{t.home.monthlyUsage || "В этом месяце"}</span>
                   <span className="text-sm text-muted-foreground">
                     {userStatsQuery.data.checksThisMonth}
-                    {userStatsQuery.data.limits.monthlyLimit > 0 
+                    {(userStatsQuery.data.limits.monthlyLimit ?? 0) > 0 
                       ? ` / ${userStatsQuery.data.limits.monthlyLimit}`
                       : ` (${t.home.unlimited || "без лимита"})`
                     }
                   </span>
                 </div>
-                {userStatsQuery.data.limits.monthlyLimit > 0 ? (
+                {(userStatsQuery.data.limits.monthlyLimit ?? 0) > 0 ? (
                   <>
                     <Progress 
-                      value={(userStatsQuery.data.checksThisMonth / userStatsQuery.data.limits.monthlyLimit) * 100} 
-                      className={`h-2 ${userStatsQuery.data.checksThisMonth >= userStatsQuery.data.limits.monthlyLimit ? '[&>div]:bg-red-500' : ''}`}
+                      value={(userStatsQuery.data.checksThisMonth / (userStatsQuery.data.limits.monthlyLimit ?? 1)) * 100} 
+                      className={`h-2 ${userStatsQuery.data.checksThisMonth >= (userStatsQuery.data.limits.monthlyLimit ?? 0) ? '[&>div]:bg-red-500' : ''}`}
                     />
-                    {userStatsQuery.data.checksThisMonth >= userStatsQuery.data.limits.monthlyLimit && (
+                    {userStatsQuery.data.checksThisMonth >= (userStatsQuery.data.limits.monthlyLimit ?? 0) && (
                       <div className="flex items-center gap-2 text-red-500 text-sm">
                         <AlertCircle className="h-4 w-4" />
                         {t.home.monthlyLimitReached || "Месячный лимит исчерпан"}
@@ -565,8 +587,18 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Batch Limit Info */}
+              {(userStatsQuery.data.limits.batchLimit ?? 0) > 0 && (
+                <div className="pt-2 border-t">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">{t.home.batchLimit || "Макс. номеров в партии"}</span>
+                    <span className="font-medium">{userStatsQuery.data.limits.batchLimit}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Estimated checks for unlimited users */}
-              {userStatsQuery.data.limits.dailyLimit === 0 && isAdmin && balanceQuery.data?.balance && (
+              {(userStatsQuery.data.limits.dailyLimit ?? 0) === 0 && isAdmin && balanceQuery.data?.balance && (
                 <div className="pt-2 border-t">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">{t.home.estimatedChecks || "Примерно доступно проверок"}</span>

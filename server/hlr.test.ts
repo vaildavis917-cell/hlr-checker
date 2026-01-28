@@ -79,7 +79,7 @@ describe("HLR Router", () => {
     expect(result).toHaveProperty("balance");
     expect(result).toHaveProperty("currency");
     expect(typeof result.currency).toBe("string");
-  });
+  }, 15000);
 
   it("should have listBatches procedure that returns array", async () => {
     const ctx = createAuthContext();

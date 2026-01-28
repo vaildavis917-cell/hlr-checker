@@ -95,7 +95,9 @@ export default function Admin() {
   const [isLimitsDialogOpen, setIsLimitsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [dailyLimit, setDailyLimit] = useState(0);
+  const [weeklyLimit, setWeeklyLimit] = useState(0);
   const [monthlyLimit, setMonthlyLimit] = useState(0);
+  const [batchLimit, setBatchLimit] = useState(0);
 
   const usersQuery = trpc.admin.listUsers.useQuery();
   const createUserMutation = trpc.admin.createUser.useMutation();
@@ -210,7 +212,9 @@ export default function Admin() {
   const openLimitsDialog = (u: User) => {
     setSelectedUser(u);
     setDailyLimit(u.dailyLimit || 0);
+    setWeeklyLimit(u.weeklyLimit || 0);
     setMonthlyLimit(u.monthlyLimit || 0);
+    setBatchLimit(u.batchLimit || 0);
     setIsLimitsDialogOpen(true);
   };
 
@@ -219,8 +223,10 @@ export default function Admin() {
     try {
       await updateLimitsMutation.mutateAsync({
         userId: selectedUser.id,
-        dailyLimit,
-        monthlyLimit,
+        dailyLimit: dailyLimit || null,
+        weeklyLimit: weeklyLimit || null,
+        monthlyLimit: monthlyLimit || null,
+        batchLimit: batchLimit || null,
       });
       usersQuery.refetch();
       setIsLimitsDialogOpen(false);
@@ -322,12 +328,14 @@ export default function Admin() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">{t.admin.role}</Label>
-                    <Select value={newRole} onValueChange={(v: "user" | "admin") => setNewRole(v)}>
+                    <Select value={newRole} onValueChange={(v: "user" | "admin" | "manager" | "viewer") => setNewRole(v)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="viewer">{t.admin.viewer || "Viewer"}</SelectItem>
                         <SelectItem value="user">{t.admin.user}</SelectItem>
+                        <SelectItem value="manager">{t.admin.manager || "Manager"}</SelectItem>
                         <SelectItem value="admin">{t.nav.admin}</SelectItem>
                       </SelectContent>
                     </Select>
@@ -396,14 +404,16 @@ export default function Admin() {
                         <TableCell>
                           <Select
                             value={u.role}
-                            onValueChange={(value: "user" | "admin") => handleUpdateRole(u.id, value)}
+                            onValueChange={(value: "user" | "admin" | "manager" | "viewer") => handleUpdateRole(u.id, value)}
                             disabled={u.id === user?.id}
                           >
-                            <SelectTrigger className="w-[100px]">
+                            <SelectTrigger className="w-[120px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="viewer">{t.admin.viewer || "Viewer"}</SelectItem>
                               <SelectItem value="user">{t.admin.user}</SelectItem>
+                              <SelectItem value="manager">{t.admin.manager || "Manager"}</SelectItem>
                               <SelectItem value="admin">{t.nav.admin}</SelectItem>
                             </SelectContent>
                           </Select>
@@ -495,7 +505,7 @@ export default function Admin() {
 
         {/* Limits Dialog */}
         <Dialog open={isLimitsDialogOpen} onOpenChange={setIsLimitsDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{t.admin.setUserLimits}</DialogTitle>
               <DialogDescription>
@@ -504,28 +514,55 @@ export default function Admin() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="dailyLimit">{t.admin.dailyLimit}</Label>
-                <Input
-                  id="dailyLimit"
-                  type="number"
-                  min="0"
-                  value={dailyLimit}
-                  onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
-                  placeholder={t.admin.zeroUnlimited}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dailyLimit">{t.admin.dailyLimit}</Label>
+                  <Input
+                    id="dailyLimit"
+                    type="number"
+                    min="0"
+                    value={dailyLimit}
+                    onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="weeklyLimit">{t.admin.weeklyLimit || "Недельный лимит"}</Label>
+                  <Input
+                    id="weeklyLimit"
+                    type="number"
+                    min="0"
+                    value={weeklyLimit}
+                    onChange={(e) => setWeeklyLimit(parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="monthlyLimit">{t.admin.monthlyLimit}</Label>
-                <Input
-                  id="monthlyLimit"
-                  type="number"
-                  min="0"
-                  value={monthlyLimit}
-                  onChange={(e) => setMonthlyLimit(parseInt(e.target.value) || 0)}
-                  placeholder={t.admin.zeroUnlimited}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyLimit">{t.admin.monthlyLimit}</Label>
+                  <Input
+                    id="monthlyLimit"
+                    type="number"
+                    min="0"
+                    value={monthlyLimit}
+                    onChange={(e) => setMonthlyLimit(parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="batchLimit">{t.admin.batchLimit || "Лимит на партию"}</Label>
+                  <Input
+                    id="batchLimit"
+                    type="number"
+                    min="0"
+                    value={batchLimit}
+                    onChange={(e) => setBatchLimit(parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                </div>
               </div>
+              <p className="text-xs text-muted-foreground">{t.admin.zeroUnlimited}</p>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsLimitsDialogOpen(false)}>

@@ -1423,10 +1423,13 @@ export const appRouter = router({
         validNumbers: stats.validChecks,
         invalidNumbers: stats.invalidChecks,
         checksToday: stats.todayChecks,
+        checksThisWeek: userLimits?.checksThisWeek || 0,
         checksThisMonth: stats.monthChecks,
         limits: {
-          dailyLimit: userLimits?.dailyLimit || 0,
-          monthlyLimit: userLimits?.monthlyLimit || 0,
+          dailyLimit: userLimits?.dailyLimit || null,
+          weeklyLimit: userLimits?.weeklyLimit || null,
+          monthlyLimit: userLimits?.monthlyLimit || null,
+          batchLimit: userLimits?.batchLimit || null,
         }
       };
     }),

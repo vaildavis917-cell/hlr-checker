@@ -45,13 +45,23 @@ export default function Dashboard() {
   const { data: stats } = trpc.hlr.getUserStats.useQuery();
   const { data: balance } = trpc.hlr.getBalance.useQuery();
 
-  const dailyLimit = stats?.limits?.dailyLimit || 0;
-  const monthlyLimit = stats?.limits?.monthlyLimit || 0;
+  const dailyLimit = stats?.limits?.dailyLimit ?? 0;
+  const weeklyLimit = stats?.limits?.weeklyLimit ?? 0;
+  const monthlyLimit = stats?.limits?.monthlyLimit ?? 0;
+  const batchLimit = stats?.limits?.batchLimit ?? 0;
   const checksToday = stats?.checksToday || 0;
+  const checksThisWeek = stats?.checksThisWeek || 0;
   const checksThisMonth = stats?.checksThisMonth || 0;
   
   const dailyProgress = dailyLimit > 0 ? (checksToday / dailyLimit) * 100 : 0;
+  const weeklyProgress = weeklyLimit > 0 ? (checksThisWeek / weeklyLimit) * 100 : 0;
   const monthlyProgress = monthlyLimit > 0 ? (checksThisMonth / monthlyLimit) * 100 : 0;
+  
+  // Check if any limit is close to being reached (>80%)
+  const isDailyWarning = dailyLimit > 0 && dailyProgress >= 80 && dailyProgress < 100;
+  const isWeeklyWarning = weeklyLimit > 0 && weeklyProgress >= 80 && weeklyProgress < 100;
+  const isMonthlyWarning = monthlyLimit > 0 && monthlyProgress >= 80 && monthlyProgress < 100;
+  const hasWarning = isDailyWarning || isWeeklyWarning || isMonthlyWarning;
   
   // Estimate available checks based on balance (assuming ~$0.01 per check)
   const estimatedChecks = balance?.balance ? Math.floor(balance.balance / 0.01) : 0;
@@ -120,8 +130,9 @@ export default function Dashboard() {
         </div>
 
         {/* Usage Limits */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Daily Limit */}
+          <Card className={dailyProgress >= 100 ? "border-destructive" : isDailyWarning ? "border-yellow-500" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
@@ -137,9 +148,15 @@ export default function Dashboard() {
             <CardContent>
               {dailyLimit > 0 ? (
                 <>
-                  <Progress value={dailyProgress} className="h-3" />
+                  <Progress 
+                    value={dailyProgress} 
+                    className={`h-3 ${dailyProgress >= 100 ? '[&>div]:bg-destructive' : isDailyWarning ? '[&>div]:bg-yellow-500' : ''}`} 
+                  />
                   {dailyProgress >= 100 && (
                     <p className="text-sm text-destructive mt-2">{t.home.dailyLimitReached}</p>
+                  )}
+                  {isDailyWarning && (
+                    <p className="text-sm text-yellow-500 mt-2">{t.home.limitWarning || "Приближается к лимиту"}</p>
                   )}
                 </>
               ) : (
@@ -148,7 +165,35 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          {/* Weekly Limit */}
+          {weeklyLimit > 0 && (
+            <Card className={weeklyProgress >= 100 ? "border-destructive" : isWeeklyWarning ? "border-yellow-500" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  {t.home.weeklyUsage}
+                </CardTitle>
+                <CardDescription>
+                  {checksThisWeek} / {weeklyLimit} {t.statistics?.checksUsed || "checks used"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Progress 
+                  value={weeklyProgress} 
+                  className={`h-3 ${weeklyProgress >= 100 ? '[&>div]:bg-destructive' : isWeeklyWarning ? '[&>div]:bg-yellow-500' : ''}`} 
+                />
+                {weeklyProgress >= 100 && (
+                  <p className="text-sm text-destructive mt-2">{t.home.weeklyLimitReached}</p>
+                )}
+                {isWeeklyWarning && (
+                  <p className="text-sm text-yellow-500 mt-2">{t.home.limitWarning || "Приближается к лимиту"}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Monthly Limit */}
+          <Card className={monthlyProgress >= 100 ? "border-destructive" : isMonthlyWarning ? "border-yellow-500" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
@@ -164,9 +209,15 @@ export default function Dashboard() {
             <CardContent>
               {monthlyLimit > 0 ? (
                 <>
-                  <Progress value={monthlyProgress} className="h-3" />
+                  <Progress 
+                    value={monthlyProgress} 
+                    className={`h-3 ${monthlyProgress >= 100 ? '[&>div]:bg-destructive' : isMonthlyWarning ? '[&>div]:bg-yellow-500' : ''}`} 
+                  />
                   {monthlyProgress >= 100 && (
                     <p className="text-sm text-destructive mt-2">{t.home.monthlyLimitReached}</p>
+                  )}
+                  {isMonthlyWarning && (
+                    <p className="text-sm text-yellow-500 mt-2">{t.home.limitWarning || "Приближается к лимиту"}</p>
                   )}
                 </>
               ) : (
@@ -174,6 +225,24 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+
+          {/* Batch Limit Info */}
+          {batchLimit > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  {t.home.batchLimit}
+                </CardTitle>
+                <CardDescription>
+                  {t.admin?.batchLimit || "Максимум номеров в одной партии"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{batchLimit}</div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Recent Activity - Admin sees all users, regular users see only their own */}
