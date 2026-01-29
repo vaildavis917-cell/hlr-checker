@@ -19,7 +19,7 @@ type AccessRequest = {
   name: string;
   email: string | null;
   phone: string | null;
-  reason: string | null;
+  telegram: string | null;
   status: "pending" | "approved" | "rejected";
   processedBy: number | null;
   adminComment: string | null;
@@ -357,11 +357,11 @@ export default function AccessRequests() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {request.reason && (
+              {request.telegram && (
                 <div className="mb-3 p-3 bg-muted/50 rounded-lg">
                   <div className="flex items-start gap-2">
                     <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                    <p className="text-sm">{request.reason}</p>
+                    <p className="text-sm">Telegram: {request.telegram}</p>
                   </div>
                 </div>
               )}

@@ -285,8 +285,8 @@ export const accessRequests = mysqlTable("access_requests", {
   email: varchar("email", { length: 320 }),
   /** Applicant's phone (optional) */
   phone: varchar("phone", { length: 32 }),
-  /** Reason for requesting access */
-  reason: text("reason"),
+  /** Telegram username or phone for access delivery */
+  telegram: varchar("telegram", { length: 128 }),
   /** Request status */
   status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
   /** Admin who processed the request */

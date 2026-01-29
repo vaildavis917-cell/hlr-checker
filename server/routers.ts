@@ -871,12 +871,12 @@ export const appRouter = router({
     submitAccessRequest: publicProcedure
       .input(z.object({
         name: z.string().min(2).max(128),
-        reason: z.string().max(1000).optional(),
+        telegram: z.string().max(128).optional(),
       }))
       .mutation(async ({ input }) => {
         const requestId = await createAccessRequest({
           name: input.name,
-          reason: input.reason,
+          telegram: input.telegram,
         });
         
         return { success: true, requestId };

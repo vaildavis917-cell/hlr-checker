@@ -1149,14 +1149,14 @@ export async function setUserCustomPermissions(userId: number, permissions: Perm
 
 export async function createAccessRequest(data: {
   name: string;
-  reason?: string;
+  telegram?: string;
 }): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   
   const result = await db.insert(accessRequests).values({
     name: data.name,
-    reason: data.reason || null,
+    telegram: data.telegram || null,
   });
   
   return result[0].insertId;

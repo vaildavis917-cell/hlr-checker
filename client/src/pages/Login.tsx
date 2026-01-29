@@ -29,7 +29,7 @@ export default function Login() {
   
   // Access request form state
   const [requestName, setRequestName] = useState("");
-  const [requestReason, setRequestReason] = useState("");
+  const [requestTelegram, setRequestTelegram] = useState("");
 
   const needsSetupQuery = trpc.auth.needsSetup.useQuery();
   const loginMutation = trpc.auth.login.useMutation();
@@ -118,7 +118,7 @@ export default function Login() {
     try {
       await submitRequestMutation.mutateAsync({
         name: requestName,
-        reason: requestReason || undefined,
+        telegram: requestTelegram || undefined,
       });
       setRequestSubmitted(true);
     } catch (error: any) {
@@ -163,7 +163,7 @@ export default function Login() {
                 setShowRequestForm(false);
                 setRequestSubmitted(false);
                 setRequestName("");
-                setRequestReason("");
+                setRequestTelegram("");
               }}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
@@ -214,15 +214,16 @@ export default function Login() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="requestReason">{t.accessRequest?.reason || "Причина запроса"}</Label>
+                <Label htmlFor="requestTelegram">{t.accessRequest?.telegram || "Telegram"} *</Label>
                 <div className="relative">
-                  <MessageSquare className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Textarea
-                    id="requestReason"
-                    placeholder={t.accessRequest?.reasonPlaceholder || "Расскажите, для чего вам нужен доступ..."}
-                    value={requestReason}
-                    onChange={(e) => setRequestReason(e.target.value)}
-                    className="pl-10 min-h-[100px]"
+                  <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="requestTelegram"
+                    placeholder={t.accessRequest?.telegramPlaceholder || "@username или +7999123456"}
+                    value={requestTelegram}
+                    onChange={(e) => setRequestTelegram(e.target.value)}
+                    className="pl-10"
+                    required
                   />
                 </div>
               </div>
