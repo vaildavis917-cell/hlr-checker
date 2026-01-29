@@ -20,6 +20,7 @@ import Sessions from "./pages/Sessions";
 import LoginHistory from "./pages/LoginHistory";
 import AuditLog from "./pages/AuditLog";
 import Permissions from "./pages/Permissions";
+import AccessRequests from "./pages/AccessRequests";
 
 function Router() {
   return (
@@ -40,6 +41,7 @@ function Router() {
       <Route path={"/login-history"} component={LoginHistory} />
       <Route path={"/admin/audit"} component={AuditLog} />
       <Route path={"/admin/permissions"} component={Permissions} />
+      <Route path={"/admin/requests"} component={AccessRequests} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

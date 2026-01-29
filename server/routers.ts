@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, TWELVE_HOURS_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { registerActiveBatch, updateBatchProgress, unregisterBatch, isShutdownInProgress } from "./_core/index";
 import { systemRouter } from "./_core/systemRouter";
@@ -58,6 +58,14 @@ import {
   getUserEffectivePermissions,
   setUserCustomPermissions,
   userHasPermission,
+  createAccessRequest,
+  getAccessRequestById,
+  getAccessRequestByEmail,
+  getAllAccessRequests,
+  getPendingAccessRequestsCount,
+  approveAccessRequest,
+  rejectAccessRequest,
+  deleteAccessRequest,
 } from "./db";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
@@ -538,6 +546,158 @@ const adminRouter = router({
       }
       return { success: true };
     }),
+
+  // Access Requests Management
+  getAccessRequests: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "approved", "rejected"]).optional() }))
+    .query(async ({ input }) => {
+      return await getAllAccessRequests(input.status);
+    }),
+
+  getPendingRequestsCount: adminProcedure.query(async () => {
+    return await getPendingAccessRequestsCount();
+  }),
+
+  approveAccessRequest: adminProcedure
+    .input(z.object({
+      requestId: z.number(),
+      username: z.string().min(3).max(64),
+      password: z.string().min(6).max(128),
+      role: z.enum(["user", "admin", "manager", "viewer"]).default("user"),
+      comment: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const request = await getAccessRequestById(input.requestId);
+      if (!request) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+      }
+      if (request.status !== "pending") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Request already processed" });
+      }
+      
+      // Check if username already exists
+      const existingUser = await getUserByUsername(input.username);
+      if (existingUser) {
+        throw new TRPCError({ code: "CONFLICT", message: "Username already exists" });
+      }
+      
+      // Create user
+      const userId = await createUser({
+        username: input.username,
+        password: input.password,
+        name: request.name,
+        email: request.email,
+        role: input.role,
+      });
+      
+      // Approve request
+      await approveAccessRequest(input.requestId, ctx.user.id, userId, input.comment);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "approve_access_request",
+        details: `Approved access request #${input.requestId}, created user #${userId} (${input.username})`,
+      });
+      
+      return { success: true, userId };
+    }),
+
+  rejectAccessRequest: adminProcedure
+    .input(z.object({
+      requestId: z.number(),
+      comment: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const request = await getAccessRequestById(input.requestId);
+      if (!request) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+      }
+      if (request.status !== "pending") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Request already processed" });
+      }
+      
+      await rejectAccessRequest(input.requestId, ctx.user.id, input.comment);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "reject_access_request",
+        details: `Rejected access request #${input.requestId} (${request.email})`,
+      });
+      
+      return { success: true };
+    }),
+
+  deleteAccessRequest: adminProcedure
+    .input(z.object({ requestId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await deleteAccessRequest(input.requestId);
+      await logAction({
+        userId: ctx.user.id,
+        action: "delete_access_request",
+        details: `Deleted access request #${input.requestId}`,
+      });
+      return { success: true };
+    }),
+
+  // Get all sessions for a specific user (admin only)
+  getUserSessions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const sessions = await getSessionsByUserId(input.userId);
+      return sessions.map(s => ({
+        id: s.id,
+        deviceInfo: s.deviceInfo,
+        browser: s.browser,
+        os: s.os,
+        ipAddress: s.ipAddress,
+        location: s.location,
+        lastActivity: s.lastActivity,
+        createdAt: s.createdAt,
+        expiresAt: s.expiresAt,
+        isExpired: new Date(s.expiresAt) < new Date(),
+      }));
+    }),
+
+  // Terminate a specific session for any user (admin only)
+  terminateUserSession: adminProcedure
+    .input(z.object({ sessionId: z.number(), userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const sessions = await getSessionsByUserId(input.userId);
+      const session = sessions.find(s => s.id === input.sessionId);
+      
+      if (!session) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      }
+      
+      await deleteSession(input.sessionId);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_terminate_session",
+        details: `Admin terminated session ${input.sessionId} for user ${input.userId}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true };
+    }),
+
+  // Terminate all sessions for a specific user (admin only)
+  terminateAllUserSessions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const count = await deleteAllUserSessions(input.userId);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_terminate_all_sessions",
+        details: `Admin terminated ${count} sessions for user ${input.userId}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true, count };
+    }),
 });
 
 // Export templates router
@@ -649,7 +809,7 @@ export const appRouter = router({
 
         // Set session cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: TWELVE_HOURS_MS });
 
         return { 
           success: true, 
@@ -701,10 +861,48 @@ export const appRouter = router({
         const result = await login(input.username, input.password, ctx.req);
         if (result && 'token' in result) {
           const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: TWELVE_HOURS_MS });
         }
 
         return { userId, success: true };
+      }),
+
+    // Submit access request (public)
+    submitAccessRequest: publicProcedure
+      .input(z.object({
+        name: z.string().min(2).max(128),
+        email: z.string().email().max(320),
+        phone: z.string().max(32).optional(),
+        reason: z.string().max(1000).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Check if email already has a pending request
+        const existing = await getAccessRequestByEmail(input.email);
+        if (existing && existing.status === "pending") {
+          throw new TRPCError({ 
+            code: "CONFLICT", 
+            message: "A request with this email is already pending" 
+          });
+        }
+        
+        // Check if user with this email already exists
+        const users = await getAllUsers();
+        const existingUser = users.find(u => u.email === input.email);
+        if (existingUser) {
+          throw new TRPCError({ 
+            code: "CONFLICT", 
+            message: "A user with this email already exists" 
+          });
+        }
+        
+        const requestId = await createAccessRequest({
+          name: input.name,
+          email: input.email,
+          phone: input.phone,
+          reason: input.reason,
+        });
+        
+        return { success: true, requestId };
       }),
 
     // Get all sessions for current user

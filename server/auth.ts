@@ -29,7 +29,7 @@ export async function createSession(user: User): Promise<string> {
   const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("12h") // 12 hours session lifetime
     .sign(getJwtSecret());
 
   return token;
@@ -117,7 +117,7 @@ export async function login(
     const ipAddress = req.ip || req.headers["x-forwarded-for"]?.toString() || "Unknown";
     
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    expiresAt.setHours(expiresAt.getHours() + 12); // 12 hours session lifetime
     
     try {
       await db.createSession({

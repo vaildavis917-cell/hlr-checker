@@ -54,7 +54,9 @@ import {
   UserX,
   UserCheck,
   KeyRound,
-  Settings2
+  Settings2,
+  Monitor,
+  LogOut
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -98,6 +100,10 @@ export default function Admin() {
   const [weeklyLimit, setWeeklyLimit] = useState(0);
   const [monthlyLimit, setMonthlyLimit] = useState(0);
   const [batchLimit, setBatchLimit] = useState(0);
+  
+  // Sessions dialog state
+  const [isSessionsDialogOpen, setIsSessionsDialogOpen] = useState(false);
+  const [sessionsUserId, setSessionsUserId] = useState<number | null>(null);
 
   const usersQuery = trpc.admin.listUsers.useQuery();
   const createUserMutation = trpc.admin.createUser.useMutation();
@@ -106,6 +112,14 @@ export default function Admin() {
   const toggleActiveMutation = trpc.admin.toggleUserActive.useMutation();
   const resetPasswordMutation = trpc.admin.resetUserPassword.useMutation();
   const updateLimitsMutation = trpc.admin.updateUserLimits.useMutation();
+  
+  // Sessions queries and mutations
+  const userSessionsQuery = trpc.admin.getUserSessions.useQuery(
+    { userId: sessionsUserId! },
+    { enabled: !!sessionsUserId && isSessionsDialogOpen }
+  );
+  const terminateSessionMutation = trpc.admin.terminateUserSession.useMutation();
+  const terminateAllSessionsMutation = trpc.admin.terminateAllUserSessions.useMutation();
 
   // Check if user is admin
   if (user?.role !== "admin") {
@@ -233,6 +247,33 @@ export default function Admin() {
       toast.success(t.admin.limitsUpdated);
     } catch (error) {
       toast.error(t.admin.limitsUpdated);
+    }
+  };
+
+  const openSessionsDialog = (userId: number) => {
+    setSessionsUserId(userId);
+    setIsSessionsDialogOpen(true);
+  };
+
+  const handleTerminateSession = async (sessionId: number) => {
+    if (!sessionsUserId) return;
+    try {
+      await terminateSessionMutation.mutateAsync({ sessionId, userId: sessionsUserId });
+      userSessionsQuery.refetch();
+      toast.success(t.admin?.sessionTerminated || "Сессия завершена");
+    } catch (error) {
+      toast.error(t.admin?.sessionTerminated || "Ошибка");
+    }
+  };
+
+  const handleTerminateAllSessions = async () => {
+    if (!sessionsUserId) return;
+    try {
+      const result = await terminateAllSessionsMutation.mutateAsync({ userId: sessionsUserId });
+      userSessionsQuery.refetch();
+      toast.success(`${t.admin?.allSessionsTerminated || "Все сессии завершены"}: ${result.count}`);
+    } catch (error) {
+      toast.error(t.admin?.allSessionsTerminated || "Ошибка");
     }
   };
 
@@ -449,6 +490,14 @@ export default function Admin() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  onClick={() => openSessionsDialog(u.id)}
+                                  title={t.admin.userSessions}
+                                >
+                                  <Monitor className="h-4 w-4 text-cyan-500" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleToggleActive(u.id, u.isActive === "yes" ? "no" : "yes")}
                                   title={u.isActive === "yes" ? t.admin.deactivateUser : t.admin.activateUser}
                                 >
@@ -575,6 +624,80 @@ export default function Admin() {
                   t.save
                 )}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Sessions Dialog */}
+        <Dialog open={isSessionsDialogOpen} onOpenChange={setIsSessionsDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Monitor className="h-5 w-5" />
+                {t.admin.userSessions}
+              </DialogTitle>
+              <DialogDescription>
+                {usersQuery.data?.find(u => u.id === sessionsUserId)?.name || usersQuery.data?.find(u => u.id === sessionsUserId)?.username}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              {userSessionsQuery.isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : userSessionsQuery.data && userSessionsQuery.data.length > 0 ? (
+                <div className="space-y-3">
+                  {userSessionsQuery.data.map((session) => (
+                    <div key={session.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{session.browser}</span>
+                          <Badge variant={session.isExpired ? "secondary" : "default"}>
+                            {session.isExpired ? t.admin.expired : t.admin.sessionActive}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {session.os} • {session.ipAddress}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {t.admin.lastActivity}: {new Date(session.lastActivity).toLocaleString()}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleTerminateSession(session.id)}
+                        disabled={terminateSessionMutation.isPending}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  {t.admin.noActiveSessions}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsSessionsDialogOpen(false)}>
+                {t.close}
+              </Button>
+              {userSessionsQuery.data && userSessionsQuery.data.length > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={handleTerminateAllSessions}
+                  disabled={terminateAllSessionsMutation.isPending}
+                >
+                  {terminateAllSessionsMutation.isPending ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t.loading}</>
+                  ) : (
+                    <><LogOut className="h-4 w-4 mr-2" />{t.admin.terminateAllSessions}</>
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

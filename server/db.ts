@@ -1,6 +1,6 @@
 import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -1140,4 +1140,113 @@ export async function setUserCustomPermissions(userId: number, permissions: Perm
   await db.update(users)
     .set({ customPermissions: permissions ? JSON.stringify(permissions) : null })
     .where(eq(users.id, userId));
+}
+
+
+// =====================
+// Access Requests
+// =====================
+
+export async function createAccessRequest(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  reason?: string;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(accessRequests).values({
+    name: data.name,
+    email: data.email,
+    phone: data.phone || null,
+    reason: data.reason || null,
+  });
+  
+  return result[0].insertId;
+}
+
+export async function getAccessRequestById(id: number): Promise<AccessRequest | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(accessRequests).where(eq(accessRequests.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getAccessRequestByEmail(email: string): Promise<AccessRequest | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(accessRequests).where(eq(accessRequests.email, email)).limit(1);
+  return result[0];
+}
+
+export async function getAllAccessRequests(status?: "pending" | "approved" | "rejected"): Promise<AccessRequest[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  if (status) {
+    return await db.select().from(accessRequests)
+      .where(eq(accessRequests.status, status))
+      .orderBy(desc(accessRequests.createdAt));
+  }
+  
+  return await db.select().from(accessRequests).orderBy(desc(accessRequests.createdAt));
+}
+
+export async function getPendingAccessRequestsCount(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(accessRequests)
+    .where(eq(accessRequests.status, "pending"));
+  
+  return result[0]?.count || 0;
+}
+
+export async function approveAccessRequest(
+  requestId: number, 
+  adminId: number, 
+  createdUserId: number,
+  comment?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(accessRequests)
+    .set({
+      status: "approved",
+      processedBy: adminId,
+      processedAt: new Date(),
+      createdUserId,
+      adminComment: comment || null,
+    })
+    .where(eq(accessRequests.id, requestId));
+}
+
+export async function rejectAccessRequest(
+  requestId: number, 
+  adminId: number, 
+  comment?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(accessRequests)
+    .set({
+      status: "rejected",
+      processedBy: adminId,
+      processedAt: new Date(),
+      adminComment: comment || null,
+    })
+    .where(eq(accessRequests.id, requestId));
+}
+
+export async function deleteAccessRequest(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(accessRequests).where(eq(accessRequests.id, id));
 }

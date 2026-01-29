@@ -272,3 +272,33 @@ export const rolePermissions = mysqlTable("role_permissions", {
 
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type InsertRolePermission = typeof rolePermissions.$inferInsert;
+
+
+/**
+ * Access requests - stores pending access requests from users
+ */
+export const accessRequests = mysqlTable("access_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Applicant's name */
+  name: varchar("name", { length: 128 }).notNull(),
+  /** Applicant's email */
+  email: varchar("email", { length: 320 }).notNull(),
+  /** Applicant's phone (optional) */
+  phone: varchar("phone", { length: 32 }),
+  /** Reason for requesting access */
+  reason: text("reason"),
+  /** Request status */
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  /** Admin who processed the request */
+  processedBy: int("processedBy"),
+  /** Admin's comment on the decision */
+  adminComment: text("adminComment"),
+  /** When the request was processed */
+  processedAt: timestamp("processedAt"),
+  /** Created user ID (if approved) */
+  createdUserId: int("createdUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AccessRequest = typeof accessRequests.$inferSelect;
+export type InsertAccessRequest = typeof accessRequests.$inferInsert;
