@@ -17,7 +17,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 type AccessRequest = {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   reason: string | null;
   status: "pending" | "approved" | "rejected";
@@ -52,9 +52,9 @@ export default function AccessRequests() {
 
   const handleOpenApprove = (request: AccessRequest) => {
     setSelectedRequest(request);
-    // Generate username from email
-    const emailPrefix = request.email.split("@")[0];
-    setNewUsername(emailPrefix.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    // Generate username from name
+    const nameSlug = request.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    setNewUsername(nameSlug);
     setNewPassword("");
     setNewRole("user");
     setApproveComment("");

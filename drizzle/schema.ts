@@ -281,8 +281,8 @@ export const accessRequests = mysqlTable("access_requests", {
   id: int("id").autoincrement().primaryKey(),
   /** Applicant's name */
   name: varchar("name", { length: 128 }).notNull(),
-  /** Applicant's email */
-  email: varchar("email", { length: 320 }).notNull(),
+  /** Applicant's email (optional) */
+  email: varchar("email", { length: 320 }),
   /** Applicant's phone (optional) */
   phone: varchar("phone", { length: 32 }),
   /** Reason for requesting access */

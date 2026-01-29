@@ -586,7 +586,7 @@ const adminRouter = router({
         username: input.username,
         password: input.password,
         name: request.name,
-        email: request.email,
+        email: request.email || undefined,
         role: input.role,
       });
       
@@ -871,34 +871,11 @@ export const appRouter = router({
     submitAccessRequest: publicProcedure
       .input(z.object({
         name: z.string().min(2).max(128),
-        email: z.string().email().max(320),
-        phone: z.string().max(32).optional(),
         reason: z.string().max(1000).optional(),
       }))
       .mutation(async ({ input }) => {
-        // Check if email already has a pending request
-        const existing = await getAccessRequestByEmail(input.email);
-        if (existing && existing.status === "pending") {
-          throw new TRPCError({ 
-            code: "CONFLICT", 
-            message: "A request with this email is already pending" 
-          });
-        }
-        
-        // Check if user with this email already exists
-        const users = await getAllUsers();
-        const existingUser = users.find(u => u.email === input.email);
-        if (existingUser) {
-          throw new TRPCError({ 
-            code: "CONFLICT", 
-            message: "A user with this email already exists" 
-          });
-        }
-        
         const requestId = await createAccessRequest({
           name: input.name,
-          email: input.email,
-          phone: input.phone,
           reason: input.reason,
         });
         

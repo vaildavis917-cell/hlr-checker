@@ -29,8 +29,6 @@ export default function Login() {
   
   // Access request form state
   const [requestName, setRequestName] = useState("");
-  const [requestEmail, setRequestEmail] = useState("");
-  const [requestPhone, setRequestPhone] = useState("");
   const [requestReason, setRequestReason] = useState("");
 
   const needsSetupQuery = trpc.auth.needsSetup.useQuery();
@@ -112,7 +110,7 @@ export default function Login() {
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!requestName || !requestEmail) {
+    if (!requestName) {
       toast.error(t.accessRequest?.fillRequired || "Заполните обязательные поля");
       return;
     }
@@ -120,8 +118,6 @@ export default function Login() {
     try {
       await submitRequestMutation.mutateAsync({
         name: requestName,
-        email: requestEmail,
-        phone: requestPhone || undefined,
         reason: requestReason || undefined,
       });
       setRequestSubmitted(true);
@@ -167,8 +163,6 @@ export default function Login() {
                 setShowRequestForm(false);
                 setRequestSubmitted(false);
                 setRequestName("");
-                setRequestEmail("");
-                setRequestPhone("");
                 setRequestReason("");
               }}
             >
@@ -215,37 +209,6 @@ export default function Login() {
                     onChange={(e) => setRequestName(e.target.value)}
                     className="pl-10"
                     required
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="requestEmail">Email *</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="requestEmail"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={requestEmail}
-                    onChange={(e) => setRequestEmail(e.target.value)}
-                    className="pl-10"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="requestPhone">{t.accessRequest?.phone || "Телефон"}</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="requestPhone"
-                    type="tel"
-                    placeholder="+7 (999) 123-45-67"
-                    value={requestPhone}
-                    onChange={(e) => setRequestPhone(e.target.value)}
-                    className="pl-10"
                   />
                 </div>
               </div>

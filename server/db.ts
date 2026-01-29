@@ -1149,8 +1149,6 @@ export async function setUserCustomPermissions(userId: number, permissions: Perm
 
 export async function createAccessRequest(data: {
   name: string;
-  email: string;
-  phone?: string;
   reason?: string;
 }): Promise<number> {
   const db = await getDb();
@@ -1158,8 +1156,6 @@ export async function createAccessRequest(data: {
   
   const result = await db.insert(accessRequests).values({
     name: data.name,
-    email: data.email,
-    phone: data.phone || null,
     reason: data.reason || null,
   });
   

@@ -1,0 +1,1 @@
+ALTER TABLE `access_requests` MODIFY COLUMN `email` varchar(320);
