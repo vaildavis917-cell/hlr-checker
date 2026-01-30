@@ -38,6 +38,33 @@ const translations = {
     date: "Дата",
     name: "Название",
     all: "Все",
+    success: "Успешно",
+    error: "Ошибка",
+    
+    // Telegram
+    telegram: {
+      title: "Telegram уведомления",
+      description: "Настройте уведомления о новых заявках на доступ",
+      status: "Статус",
+      configured: "Уведомления настроены",
+      notConfigured: "Уведомления не настроены",
+      setup: "Настройка",
+      setupDescription: "Введите данные вашего Telegram бота",
+      botToken: "Bot Token",
+      chatId: "Chat ID",
+      chatIdHint: "Для групп Chat ID начинается с -100",
+      test: "Тест",
+      clear: "Отключить",
+      saved: "Настройки сохранены",
+      cleared: "Настройки очищены",
+      fillRequired: "Заполните все поля",
+      confirmClear: "Вы уверены, что хотите отключить уведомления?",
+      step1: "Создайте бота через @BotFather в Telegram",
+      step2: "Скопируйте токен бота",
+      step3: "Добавьте бота в чат/группу или напишите ему /start",
+      step4: "Получите Chat ID через @userinfobot или @getidsbot",
+      learnMore: "Подробнее о создании бота",
+    },
     
     // Auth
     auth: {
@@ -492,6 +519,33 @@ const translations = {
     date: "Дата",
     name: "Назва",
     all: "Всі",
+    success: "Успішно",
+    error: "Помилка",
+    
+    // Telegram
+    telegram: {
+      title: "Telegram сповіщення",
+      description: "Налаштуйте сповіщення про нові заявки на доступ",
+      status: "Статус",
+      configured: "Сповіщення налаштовано",
+      notConfigured: "Сповіщення не налаштовано",
+      setup: "Налаштування",
+      setupDescription: "Введіть дані вашого Telegram бота",
+      botToken: "Bot Token",
+      chatId: "Chat ID",
+      chatIdHint: "Для груп Chat ID починається з -100",
+      test: "Тест",
+      clear: "Вимкнути",
+      saved: "Налаштування збережено",
+      cleared: "Налаштування очищено",
+      fillRequired: "Заповніть всі поля",
+      confirmClear: "Ви впевнені, що хочете вимкнути сповіщення?",
+      step1: "Створіть бота через @BotFather в Telegram",
+      step2: "Скопіюйте токен бота",
+      step3: "Додайте бота в чат/групу або напишіть йому /start",
+      step4: "Отримайте Chat ID через @userinfobot або @getidsbot",
+      learnMore: "Детальніше про створення бота",
+    },
     
     // Auth
     auth: {
@@ -946,6 +1000,33 @@ const translations = {
     date: "Date",
     name: "Name",
     all: "All",
+    success: "Success",
+    error: "Error",
+    
+    // Telegram
+    telegram: {
+      title: "Telegram Notifications",
+      description: "Configure notifications for new access requests",
+      status: "Status",
+      configured: "Notifications configured",
+      notConfigured: "Notifications not configured",
+      setup: "Setup",
+      setupDescription: "Enter your Telegram bot details",
+      botToken: "Bot Token",
+      chatId: "Chat ID",
+      chatIdHint: "For groups, Chat ID starts with -100",
+      test: "Test",
+      clear: "Disable",
+      saved: "Settings saved",
+      cleared: "Settings cleared",
+      fillRequired: "Fill in all fields",
+      confirmClear: "Are you sure you want to disable notifications?",
+      step1: "Create a bot via @BotFather in Telegram",
+      step2: "Copy the bot token",
+      step3: "Add the bot to a chat/group or send it /start",
+      step4: "Get Chat ID via @userinfobot or @getidsbot",
+      learnMore: "Learn more about creating a bot",
+    },
     
     // Auth
     auth: {

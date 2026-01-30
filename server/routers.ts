@@ -66,7 +66,11 @@ import {
   approveAccessRequest,
   rejectAccessRequest,
   deleteAccessRequest,
+  getSetting,
+  setSetting,
+  getAllSettings,
 } from "./db";
+import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
 import { InsertHlrResult, PERMISSIONS, PERMISSION_DESCRIPTIONS, DEFAULT_PERMISSIONS, Permission } from "../drizzle/schema";
@@ -698,6 +702,65 @@ const adminRouter = router({
       
       return { success: true, count };
     }),
+
+  // Get Telegram settings
+  getTelegramSettings: adminProcedure.query(async () => {
+    const botToken = await getSetting("telegram_bot_token");
+    const chatId = await getSetting("telegram_chat_id");
+    return {
+      botToken: botToken ? "***" + botToken.slice(-4) : null, // Mask token for security
+      chatId,
+      isConfigured: !!(botToken && chatId),
+    };
+  }),
+
+  // Save Telegram settings
+  saveTelegramSettings: adminProcedure
+    .input(z.object({
+      botToken: z.string().min(1),
+      chatId: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await setSetting("telegram_bot_token", input.botToken, "Telegram Bot API Token");
+      await setSetting("telegram_chat_id", input.chatId, "Telegram Chat ID for notifications");
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_update_telegram_settings",
+        details: "Updated Telegram notification settings",
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true };
+    }),
+
+  // Test Telegram connection
+  testTelegramConnection: adminProcedure
+    .input(z.object({
+      botToken: z.string().min(1),
+      chatId: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const result = await testTelegramConnection(input.botToken, input.chatId);
+      return result;
+    }),
+
+  // Clear Telegram settings
+  clearTelegramSettings: adminProcedure.mutation(async ({ ctx }) => {
+    await setSetting("telegram_bot_token", "", "Telegram Bot API Token");
+    await setSetting("telegram_chat_id", "", "Telegram Chat ID for notifications");
+    
+    await logAction({
+      userId: ctx.user.id,
+      action: "admin_clear_telegram_settings",
+      details: "Cleared Telegram notification settings",
+      ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+      userAgent: ctx.req.headers["user-agent"],
+    });
+    
+    return { success: true };
+  }),
 });
 
 // Export templates router
@@ -878,6 +941,9 @@ export const appRouter = router({
           name: input.name,
           telegram: input.telegram,
         });
+        
+        // Send Telegram notification to admin
+        await notifyNewAccessRequest(input.name, input.telegram || null);
         
         return { success: true, requestId };
       }),

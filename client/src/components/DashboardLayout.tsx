@@ -38,7 +38,8 @@ import {
   History,
   ClipboardList,
   Key,
-  UserPlus
+  UserPlus,
+  Send
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -62,6 +63,7 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean, 
       { icon: UserPlus, label: t.accessRequest?.requests || (language === "ru" ? "Заявки" : language === "uk" ? "Заявки" : "Requests"), path: "/admin/requests" },
       { icon: Key, label: t.permissions?.title || (language === "ru" ? "Права" : language === "uk" ? "Права" : "Permissions"), path: "/admin/permissions" },
       { icon: ClipboardList, label: language === "ru" ? "Аудит" : language === "uk" ? "Аудит" : "Audit", path: "/admin/audit" },
+      { icon: Send, label: t.telegram?.title || (language === "ru" ? "Telegram" : language === "uk" ? "Telegram" : "Telegram"), path: "/admin/telegram" },
     );
   }
   

@@ -21,6 +21,7 @@ import LoginHistory from "./pages/LoginHistory";
 import AuditLog from "./pages/AuditLog";
 import Permissions from "./pages/Permissions";
 import AccessRequests from "./pages/AccessRequests";
+import TelegramSettings from "./pages/TelegramSettings";
 
 function Router() {
   return (
@@ -42,6 +43,7 @@ function Router() {
       <Route path={"/admin/audit"} component={AuditLog} />
       <Route path={"/admin/permissions"} component={Permissions} />
       <Route path={"/admin/requests"} component={AccessRequests} />
+      <Route path={"/admin/telegram"} component={TelegramSettings} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

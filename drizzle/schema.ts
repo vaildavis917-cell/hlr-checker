@@ -302,3 +302,20 @@ export const accessRequests = mysqlTable("access_requests", {
 
 export type AccessRequest = typeof accessRequests.$inferSelect;
 export type InsertAccessRequest = typeof accessRequests.$inferInsert;
+
+
+/**
+ * System settings - stores global configuration like Telegram notifications
+ */
+export const systemSettings = mysqlTable("system_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Setting key */
+  key: varchar("key", { length: 64 }).notNull().unique(),
+  /** Setting value */
+  value: text("value"),
+  /** Setting description */
+  description: varchar("description", { length: 256 }),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = typeof systemSettings.$inferInsert;

@@ -1,6 +1,6 @@
 import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest, systemSettings, SystemSetting } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -1245,4 +1245,46 @@ export async function deleteAccessRequest(id: number): Promise<void> {
   if (!db) throw new Error("Database not available");
   
   await db.delete(accessRequests).where(eq(accessRequests.id, id));
+}
+
+
+// System Settings operations
+export async function getSetting(key: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const result = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
+  return result[0]?.value || null;
+}
+
+export async function setSetting(key: string, value: string, description?: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Try to update first, if no rows affected then insert
+  const updateResult = await db.update(systemSettings)
+    .set({ value, updatedAt: new Date() })
+    .where(eq(systemSettings.key, key));
+  
+  if (updateResult[0].affectedRows === 0) {
+    await db.insert(systemSettings).values({
+      key,
+      value,
+      description: description || null,
+    });
+  }
+}
+
+export async function getAllSettings(): Promise<SystemSetting[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(systemSettings);
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(systemSettings).where(eq(systemSettings.key, key));
 }
