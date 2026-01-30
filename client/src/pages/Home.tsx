@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
+import FileDropZone from "@/components/FileDropZone";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
@@ -724,23 +725,17 @@ export default function Home() {
                   </div>
                 </TabsContent>
                 <TabsContent value="file" className="space-y-4">
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                    <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-                    <Label htmlFor="file-upload" className="cursor-pointer">
-                      <span className="text-primary hover:underline">{t.home.clickToUpload}</span>
-                      <span className="text-muted-foreground"> {t.home.orDragDrop}</span>
-                    </Label>
-                    <Input
-                      id="file-upload"
-                      type="file"
-                      accept=".csv,.txt"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {t.home.csvOrTxt}
-                    </p>
-                  </div>
+                  <FileDropZone
+                    onFileLoaded={(numbers, fileName) => {
+                      if (numbers.length === 0) {
+                        toast.error(t.home.noNumbersInFile || "Файл не содержит номеров");
+                        return;
+                      }
+                      setPhoneInput(numbers.join("\n"));
+                      toast.success(`${t.home.loaded || "Загружено"} ${numbers.length} ${t.home.numbersLoaded || "номеров из файла"}`);
+                    }}
+                    disabled={isProcessing}
+                  />
                   {phoneInput && (
                     <p className="text-sm text-muted-foreground">
                       {phoneCount} {t.home.numbersLoaded}
