@@ -63,7 +63,7 @@ type SortField = "createdAt" | "userName" | "totalEmails" | "validEmails";
 type SortDirection = "asc" | "desc";
 
 export default function AdminEmailHistory() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -245,10 +245,10 @@ export default function AdminEmailHistory() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <Mail className="h-8 w-8 text-primary" />
-            {"Email History (All Users)"}
+{language === "ru" ? "Email История (Все пользователи)" : language === "uk" ? "Email Історія (Всі користувачі)" : "Email History (All Users)"}
           </h1>
           <p className="text-muted-foreground">
-            {"View email validation history from all users"}
+{language === "ru" ? "Просмотр истории email проверок всех пользователей" : language === "uk" ? "Перегляд історії email перевірок всіх користувачів" : "View email validation history from all users"}
           </p>
         </div>
 
@@ -287,7 +287,7 @@ export default function AdminEmailHistory() {
         {/* Batches Table */}
         <Card>
           <CardHeader>
-            <CardTitle>{"Email Check History"}</CardTitle>
+<CardTitle>{language === "ru" ? "История email проверок" : language === "uk" ? "Історія email перевірок" : "Email Check History"}</CardTitle>
             <CardDescription>
               {filteredBatches.length} {t.adminHistory?.batchesFound || "batches found"}
             </CardDescription>

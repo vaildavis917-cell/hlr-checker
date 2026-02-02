@@ -191,15 +191,12 @@ export default function EmailValidator() {
 
         {/* Main Tabs */}
         <Tabs defaultValue="single" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
             <TabsTrigger value="single">
               {t.email?.singleCheck || "Single Check"}
             </TabsTrigger>
             <TabsTrigger value="batch">
               {t.email?.batchCheck || "Batch Check"}
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              {t.email?.history || "History"}
             </TabsTrigger>
           </TabsList>
 
