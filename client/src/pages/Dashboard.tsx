@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2 } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2, Mail, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
@@ -44,6 +44,8 @@ export default function Dashboard() {
   
   const { data: stats } = trpc.hlr.getUserStats.useQuery();
   const { data: balance } = trpc.hlr.getBalance.useQuery();
+  const { data: emailBalance } = trpc.email.getBalance.useQuery();
+  const { data: emailStats } = trpc.email.getStats.useQuery();
 
   const dailyLimit = stats?.limits?.dailyLimit ?? 0;
   const weeklyLimit = stats?.limits?.weeklyLimit ?? 0;
@@ -117,13 +119,26 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.home.apiBalance}</CardTitle>
+              <CardTitle className="text-sm font-medium">{t.home.apiBalance} (HLR)</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${balance?.balance?.toFixed(2) || "0.00"}</div>
+              <div className="text-2xl font-bold">{balance?.balance?.toFixed(2) || "0.00"} EUR</div>
               <p className="text-xs text-muted-foreground">
                 ~{estimatedChecks.toLocaleString()} {t.home.estimatedChecks || "checks available"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">{t.home.apiBalance} (Email)</CardTitle>
+              <Mail className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{emailBalance?.credits?.toLocaleString() || "0"}</div>
+              <p className="text-xs text-muted-foreground">
+                {t.email?.credits || "credits available"}
               </p>
             </CardContent>
           </Card>

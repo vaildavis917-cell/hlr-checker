@@ -942,6 +942,15 @@ const emailRouter = router({
       // Increment email checks counter
       await incrementUserChecks(ctx.user.id, 1, 'email');
 
+      // Log action
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_single",
+        details: `Email: ${input.email}, Result: ${result.result}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
       // Save to cache
       await saveEmailToCache({
         email: input.email,
@@ -1005,6 +1014,15 @@ const emailRouter = router({
         userId: ctx.user.id,
         name: input.name,
         totalEmails: validEmails.length,
+      });
+
+      // Log batch start
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_batch_start",
+        details: `Batch: ${input.name}, Emails: ${validEmails.length}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
       });
 
       // Check cache for existing results
@@ -1111,6 +1129,15 @@ const emailRouter = router({
         await incrementUserChecks(ctx.user.id, apiCallCount, 'email');
       }
 
+      // Log batch complete
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_batch_complete",
+        details: `Batch: ${input.name}, Valid: ${valid}, Invalid: ${invalid}, Risky: ${risky}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
       return {
         batchId,
         totalEmails: validEmails.length,
@@ -1210,6 +1237,21 @@ const emailRouter = router({
     results: RESULT_DESCRIPTIONS,
     subresults: SUBRESULT_DESCRIPTIONS,
   })),
+
+  // Get email stats for dashboard
+  getStats: protectedProcedure.query(async ({ ctx }) => {
+    const batches = await getEmailBatchesByUser(ctx.user.id);
+    const totalChecks = batches.reduce((sum, b) => sum + (b.totalEmails || 0), 0);
+    const validEmails = batches.reduce((sum, b) => sum + (b.validEmails || 0), 0);
+    const invalidEmails = batches.reduce((sum, b) => sum + (b.invalidEmails || 0), 0);
+    
+    return {
+      totalChecks,
+      validEmails,
+      invalidEmails,
+      batchCount: batches.length,
+    };
+  }),
 });
 
 export const appRouter = router({

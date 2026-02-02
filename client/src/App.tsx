@@ -22,6 +22,8 @@ import AuditLog from "./pages/AuditLog";
 import Permissions from "./pages/Permissions";
 import AccessRequests from "./pages/AccessRequests";
 import TelegramSettings from "./pages/TelegramSettings";
+import EmailValidator from "./pages/EmailValidator";
+import EmailLookup from "./pages/EmailLookup";
 
 function Router() {
   return (
@@ -44,6 +46,8 @@ function Router() {
       <Route path={"/admin/permissions"} component={Permissions} />
       <Route path={"/admin/requests"} component={AccessRequests} />
       <Route path={"/admin/telegram"} component={TelegramSettings} />
+      <Route path={"/email"} component={EmailValidator} />
+      <Route path={"/email-lookup"} component={EmailLookup} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
