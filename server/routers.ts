@@ -81,6 +81,7 @@ import {
   saveEmailToCache,
   getEmailsFromCacheBulk,
   getAllEmailBatches,
+  getUserById,
 } from "./db";
 import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
@@ -1171,7 +1172,17 @@ const emailRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
       const results = await getEmailResultsByBatch(input.batchId);
-      return { batch, results };
+      
+      // Get batch owner info for admin viewing other users' batches
+      let batchOwner = null;
+      if (ctx.user.role === "admin" && batch.userId !== ctx.user.id) {
+        const owner = await getUserById(batch.userId);
+        if (owner) {
+          batchOwner = { id: owner.id, name: owner.name, username: owner.username };
+        }
+      }
+      
+      return { batch, results, batchOwner };
     }),
 
   // Delete batch
@@ -1898,10 +1909,24 @@ export const appRouter = router({
       .input(z.object({ batchId: z.number() }))
       .query(async ({ ctx, input }) => {
         const batch = await getHlrBatchById(input.batchId);
-        if (!batch || batch.userId !== ctx.user.id) {
+        if (!batch) {
           return null;
         }
-        return batch;
+        // Allow access if user owns the batch or is admin
+        if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+          return null;
+        }
+        
+        // Get batch owner info for admin viewing other users' batches
+        let batchOwner = null;
+        if (ctx.user.role === "admin" && batch.userId !== ctx.user.id) {
+          const owner = await getUserById(batch.userId);
+          if (owner) {
+            batchOwner = { id: owner.id, name: owner.name, username: owner.username };
+          }
+        }
+        
+        return { ...batch, batchOwner };
       }),
 
     // Get all batches for current user
@@ -1923,7 +1948,9 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         const batch = await getHlrBatchById(input.batchId);
-        if (!batch || batch.userId !== ctx.user.id) {
+        // Admin can view any batch, regular users can only view their own
+        const isAdmin = ctx.user.role === 'admin';
+        if (!batch || (!isAdmin && batch.userId !== ctx.user.id)) {
           return { results: [], total: 0, pages: 0 };
         }
         const paginatedResults = await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);

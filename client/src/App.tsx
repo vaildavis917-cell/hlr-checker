@@ -37,7 +37,7 @@ function Router() {
       <Route path={"/settings"} component={SettingsPage} />
       <Route path={"/history"} component={History} />
       <Route path={"/admin"} component={Admin} />
-      <Route path={"/admin/history"} component={AdminHistory} />
+
       <Route path={"/admin/billing"} component={Admin} />
       <Route path={"/statistics"} component={Statistics} />
       <Route path={"/tools"} component={Tools} />
@@ -50,7 +50,7 @@ function Router() {
       <Route path={"/admin/telegram"} component={TelegramSettings} />
       <Route path={"/email"} component={EmailValidator} />
       <Route path={"/email-lookup"} component={EmailLookup} />
-      <Route path={"/admin/email-history"} component={AdminEmailHistory} />
+
       <Route path={"/email-history"} component={EmailHistory} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

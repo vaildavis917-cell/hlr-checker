@@ -37,7 +37,8 @@ import {
   Wallet,
   ArrowUpDown,
   Filter,
-  BarChart3
+  BarChart3,
+  User as UserIcon
 } from "lucide-react";
 import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
@@ -45,16 +46,30 @@ import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
 import FileDropZone from "@/components/FileDropZone";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSearch } from "wouter";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
 
 export default function Home() {
   const { t } = useLanguage();
+  const searchString = useSearch();
   const [phoneInput, setPhoneInput] = useState("");
   const [batchName, setBatchName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+
+  // Handle batch parameter from URL (from History page)
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const batchParam = params.get('batch');
+    if (batchParam) {
+      const batchId = parseInt(batchParam, 10);
+      if (!isNaN(batchId) && batchId > 0) {
+        setCurrentBatchId(batchId);
+      }
+    }
+  }, [searchString]);
 
   // SEO: Set page title and meta description
   useEffect(() => {
@@ -101,6 +116,12 @@ export default function Home() {
   const incompleteBatchesQuery = trpc.hlr.getIncompleteBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
     currentBatchId !== null ? { batchId: currentBatchId, page: 1, pageSize: 1000 } : { batchId: -1, page: 1, pageSize: 1000 },
+    { enabled: currentBatchId !== null && currentBatchId > 0 }
+  );
+  
+  // Get batch info (including owner for admin)
+  const batchQuery = trpc.hlr.getBatch.useQuery(
+    { batchId: currentBatchId! },
     { enabled: currentBatchId !== null && currentBatchId > 0 }
   );
   
@@ -760,7 +781,16 @@ export default function Home() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle>{t.home.results}</CardTitle>
+                  <CardTitle className="flex items-center gap-3">
+                    {t.home.results}
+                    {/* Show batch owner if admin viewing another user's batch */}
+                    {batchQuery.data?.batchOwner && (
+                      <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-md border border-primary/20 text-sm font-normal">
+                        <UserIcon className="h-4 w-4 text-primary" />
+                        <span>Владелец: {batchQuery.data.batchOwner.name || batchQuery.data.batchOwner.username}</span>
+                      </div>
+                    )}
+                  </CardTitle>
                   <CardDescription>
                     {filteredResults.length} {t.home.resultsOf} {resultsQuery.data?.total || resultsData.length}
                   </CardDescription>
