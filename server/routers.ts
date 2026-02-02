@@ -80,6 +80,7 @@ import {
   getEmailFromCache,
   saveEmailToCache,
   getEmailsFromCacheBulk,
+  getAllEmailBatches,
 } from "./db";
 import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
@@ -1252,6 +1253,42 @@ const emailRouter = router({
       batchCount: batches.length,
     };
   }),
+
+  // Get all email batches from all users (admin only)
+  listAllBatches: adminProcedure.query(async () => {
+    const batches = await getAllEmailBatches();
+    const users = await getAllUsers();
+    const userMap = new Map(users.map(u => [u.id, u]));
+    
+    return batches.map(batch => ({
+      ...batch,
+      userName: userMap.get(batch.userId)?.name || userMap.get(batch.userId)?.username || `User #${batch.userId}`,
+      userUsername: userMap.get(batch.userId)?.username || `user_${batch.userId}`,
+    }));
+  }),
+
+  // Delete any email batch (admin only)
+  adminDeleteBatch: adminProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      
+      await deleteEmailBatch(input.batchId);
+      
+      // Log action
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_delete_email_batch",
+        details: `Deleted email batch #${input.batchId} (${batch.name}) from user #${batch.userId}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+      
+      return { success: true };
+    }),
 });
 
 export const appRouter = router({

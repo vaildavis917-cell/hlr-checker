@@ -24,6 +24,7 @@ import AccessRequests from "./pages/AccessRequests";
 import TelegramSettings from "./pages/TelegramSettings";
 import EmailValidator from "./pages/EmailValidator";
 import EmailLookup from "./pages/EmailLookup";
+import AdminEmailHistory from "./pages/AdminEmailHistory";
 
 function Router() {
   return (
@@ -48,6 +49,7 @@ function Router() {
       <Route path={"/admin/telegram"} component={TelegramSettings} />
       <Route path={"/email"} component={EmailValidator} />
       <Route path={"/email-lookup"} component={EmailLookup} />
+      <Route path={"/admin/email-history"} component={AdminEmailHistory} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

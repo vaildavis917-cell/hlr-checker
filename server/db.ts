@@ -1550,3 +1550,13 @@ export async function getEmailsFromCacheBulk(emails: string[]): Promise<Map<stri
   
   return cacheMap;
 }
+
+// Get all email batches (for admin)
+export async function getAllEmailBatches(): Promise<EmailBatch[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(emailBatches)
+    .orderBy(desc(emailBatches.createdAt));
+}

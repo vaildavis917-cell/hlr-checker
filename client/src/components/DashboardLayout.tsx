@@ -66,6 +66,8 @@ const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean, 
       { icon: Users, label: t.nav.users, path: "/admin" },
       { icon: UserPlus, label: t.accessRequest?.requests || (language === "ru" ? "Заявки" : language === "uk" ? "Заявки" : "Requests"), path: "/admin/requests" },
       { icon: Key, label: t.permissions?.title || (language === "ru" ? "Права" : language === "uk" ? "Права" : "Permissions"), path: "/admin/permissions" },
+      { icon: History, label: language === "ru" ? "HLR История" : language === "uk" ? "HLR Історія" : "HLR History", path: "/admin/history" },
+      { icon: Mail, label: language === "ru" ? "Email История" : language === "uk" ? "Email Історія" : "Email History", path: "/admin/email-history" },
       { icon: ClipboardList, label: language === "ru" ? "Аудит" : language === "uk" ? "Аудит" : "Audit", path: "/admin/audit" },
       { icon: Send, label: t.telegram?.title || (language === "ru" ? "Telegram" : language === "uk" ? "Telegram" : "Telegram"), path: "/admin/telegram" },
     );
