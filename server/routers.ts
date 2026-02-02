@@ -1923,7 +1923,9 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         const batch = await getHlrBatchById(input.batchId);
-        if (!batch || batch.userId !== ctx.user.id) {
+        // Admin can view any batch, regular users can only view their own
+        const isAdmin = ctx.user.role === 'admin';
+        if (!batch || (!isAdmin && batch.userId !== ctx.user.id)) {
           return { results: [], total: 0, pages: 0 };
         }
         const paginatedResults = await getHlrResultsByBatchIdPaginated(input.batchId, input.page, input.pageSize);
