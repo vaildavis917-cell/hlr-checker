@@ -58,7 +58,7 @@ export default function Home() {
 
   // SEO: Set page title and meta description
   useEffect(() => {
-    document.title = "DataCheck Pro - Проверка номеров и email";
+    document.title = "DataCheck Pro - HLR и Email проверка номеров";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Сервис HLR проверки телефонных номеров, информации об операторе, статуса роуминга и портирования.');
