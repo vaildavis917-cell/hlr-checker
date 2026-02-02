@@ -1,6 +1,6 @@
 import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest, systemSettings, SystemSetting } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest, systemSettings, SystemSetting, emailBatches, EmailBatch, InsertEmailBatch, emailResults, EmailResult, InsertEmailResult, emailCache, EmailCache, InsertEmailCache } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -418,8 +418,8 @@ function getISOWeek(date: Date): string {
   return `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
 }
 
-// User limits management
-export async function checkUserLimits(userId: number, numbersCount: number): Promise<{ allowed: boolean; reason?: string; limits?: any }> {
+// User limits management - type: 'hlr' or 'email'
+export async function checkUserLimits(userId: number, numbersCount: number, type: 'hlr' | 'email' = 'hlr'): Promise<{ allowed: boolean; reason?: string; limits?: any }> {
   const db = await getDb();
   if (!db) return { allowed: true };
   
@@ -431,58 +431,75 @@ export async function checkUserLimits(userId: number, numbersCount: number): Pro
   const thisWeek = getISOWeek(now);
   const thisMonth = today.substring(0, 7);
   
-  let checksToday = user.checksToday || 0;
-  let checksThisWeek = (user as any).checksThisWeek || 0;
-  let checksThisMonth = user.checksThisMonth || 0;
+  // Use type-specific fields or fallback to legacy fields
+  const prefix = type === 'email' ? 'email' : 'hlr';
+  const u = user as any;
+  
+  // Get limits (new fields first, then legacy fallback for HLR)
+  const dailyLimit = u[`${prefix}DailyLimit`] ?? (type === 'hlr' ? user.dailyLimit : null);
+  const weeklyLimit = u[`${prefix}WeeklyLimit`] ?? (type === 'hlr' ? u.weeklyLimit : null);
+  const monthlyLimit = u[`${prefix}MonthlyLimit`] ?? (type === 'hlr' ? user.monthlyLimit : null);
+  const batchLimit = u[`${prefix}BatchLimit`] ?? (type === 'hlr' ? u.batchLimit : null);
+  
+  // Get usage counters
+  let checksToday = (u[`${prefix}ChecksToday`] ?? (type === 'hlr' ? user.checksToday : 0)) || 0;
+  let checksThisWeek = (u[`${prefix}ChecksThisWeek`] ?? (type === 'hlr' ? u.checksThisWeek : 0)) || 0;
+  let checksThisMonth = (u[`${prefix}ChecksThisMonth`] ?? (type === 'hlr' ? user.checksThisMonth : 0)) || 0;
+  
+  const lastCheckDate = u[`${prefix}LastCheckDate`] ?? (type === 'hlr' ? user.lastCheckDate : null);
+  const lastCheckWeek = u[`${prefix}LastCheckWeek`] ?? (type === 'hlr' ? u.lastCheckWeek : null);
+  const lastCheckMonth = u[`${prefix}LastCheckMonth`] ?? (type === 'hlr' ? user.lastCheckMonth : null);
   
   // Reset daily counter if new day
-  if (user.lastCheckDate !== today) {
+  if (lastCheckDate !== today) {
     checksToday = 0;
   }
   
   // Reset weekly counter if new week
-  if ((user as any).lastCheckWeek !== thisWeek) {
+  if (lastCheckWeek !== thisWeek) {
     checksThisWeek = 0;
   }
   
   // Reset monthly counter if new month
-  if (user.lastCheckMonth !== thisMonth) {
+  if (lastCheckMonth !== thisMonth) {
     checksThisMonth = 0;
   }
   
+  const typeLabel = type === 'email' ? 'Email' : 'HLR';
+  
   // Check per-batch limit first
-  if ((user as any).batchLimit && numbersCount > (user as any).batchLimit) {
+  if (batchLimit && numbersCount > batchLimit) {
     return { 
       allowed: false, 
-      reason: `Batch limit exceeded. Max: ${(user as any).batchLimit} numbers per batch`,
-      limits: { batchLimit: (user as any).batchLimit }
+      reason: `${typeLabel} batch limit exceeded. Max: ${batchLimit} per batch`,
+      limits: { batchLimit }
     };
   }
   
   // Check daily limit
-  if (user.dailyLimit && checksToday + numbersCount > user.dailyLimit) {
+  if (dailyLimit && checksToday + numbersCount > dailyLimit) {
     return { 
       allowed: false, 
-      reason: `Daily limit exceeded. Used: ${checksToday}/${user.dailyLimit}`,
-      limits: { dailyUsed: checksToday, dailyLimit: user.dailyLimit }
+      reason: `${typeLabel} daily limit exceeded. Used: ${checksToday}/${dailyLimit}`,
+      limits: { dailyUsed: checksToday, dailyLimit }
     };
   }
   
   // Check weekly limit
-  if ((user as any).weeklyLimit && checksThisWeek + numbersCount > (user as any).weeklyLimit) {
+  if (weeklyLimit && checksThisWeek + numbersCount > weeklyLimit) {
     return { 
       allowed: false, 
-      reason: `Weekly limit exceeded. Used: ${checksThisWeek}/${(user as any).weeklyLimit}`,
-      limits: { weeklyUsed: checksThisWeek, weeklyLimit: (user as any).weeklyLimit }
+      reason: `${typeLabel} weekly limit exceeded. Used: ${checksThisWeek}/${weeklyLimit}`,
+      limits: { weeklyUsed: checksThisWeek, weeklyLimit }
     };
   }
   
   // Check monthly limit
-  if (user.monthlyLimit && checksThisMonth + numbersCount > user.monthlyLimit) {
+  if (monthlyLimit && checksThisMonth + numbersCount > monthlyLimit) {
     return { 
       allowed: false, 
-      reason: `Monthly limit exceeded. Used: ${checksThisMonth}/${user.monthlyLimit}`,
-      limits: { monthlyUsed: checksThisMonth, monthlyLimit: user.monthlyLimit }
+      reason: `${typeLabel} monthly limit exceeded. Used: ${checksThisMonth}/${monthlyLimit}`,
+      limits: { monthlyUsed: checksThisMonth, monthlyLimit }
     };
   }
   
@@ -490,17 +507,17 @@ export async function checkUserLimits(userId: number, numbersCount: number): Pro
     allowed: true,
     limits: {
       dailyUsed: checksToday,
-      dailyLimit: user.dailyLimit,
+      dailyLimit,
       weeklyUsed: checksThisWeek,
-      weeklyLimit: (user as any).weeklyLimit,
+      weeklyLimit,
       monthlyUsed: checksThisMonth,
-      monthlyLimit: user.monthlyLimit,
-      batchLimit: (user as any).batchLimit,
+      monthlyLimit,
+      batchLimit,
     }
   };
 }
 
-export async function incrementUserChecks(userId: number, count: number): Promise<void> {
+export async function incrementUserChecks(userId: number, count: number, type: 'hlr' | 'email' = 'hlr'): Promise<void> {
   const db = await getDb();
   if (!db) return;
   
@@ -512,34 +529,72 @@ export async function incrementUserChecks(userId: number, count: number): Promis
   const thisWeek = getISOWeek(now);
   const thisMonth = today.substring(0, 7);
   
-  let checksToday = user.checksToday || 0;
-  let checksThisWeek = (user as any).checksThisWeek || 0;
-  let checksThisMonth = user.checksThisMonth || 0;
+  const u = user as any;
+  const prefix = type === 'email' ? 'email' : 'hlr';
+  
+  // Get current counters
+  let checksToday = u[`${prefix}ChecksToday`] || (type === 'hlr' ? user.checksToday : 0) || 0;
+  let checksThisWeek = u[`${prefix}ChecksThisWeek`] || (type === 'hlr' ? u.checksThisWeek : 0) || 0;
+  let checksThisMonth = u[`${prefix}ChecksThisMonth`] || (type === 'hlr' ? user.checksThisMonth : 0) || 0;
+  
+  const lastCheckDate = u[`${prefix}LastCheckDate`] || (type === 'hlr' ? user.lastCheckDate : null);
+  const lastCheckWeek = u[`${prefix}LastCheckWeek`] || (type === 'hlr' ? u.lastCheckWeek : null);
+  const lastCheckMonth = u[`${prefix}LastCheckMonth`] || (type === 'hlr' ? user.lastCheckMonth : null);
   
   // Reset if new day/week/month
-  if (user.lastCheckDate !== today) {
+  if (lastCheckDate !== today) {
     checksToday = 0;
   }
-  if ((user as any).lastCheckWeek !== thisWeek) {
+  if (lastCheckWeek !== thisWeek) {
     checksThisWeek = 0;
   }
-  if (user.lastCheckMonth !== thisMonth) {
+  if (lastCheckMonth !== thisMonth) {
     checksThisMonth = 0;
   }
   
-  await db.update(users).set({
-    checksToday: checksToday + count,
-    checksThisWeek: checksThisWeek + count,
-    checksThisMonth: checksThisMonth + count,
-    lastCheckDate: today,
-    lastCheckWeek: thisWeek,
-    lastCheckMonth: thisMonth,
-  } as any).where(eq(users.id, userId));
+  // Build update object based on type
+  const updateData: any = {};
+  if (type === 'email') {
+    updateData.emailChecksToday = checksToday + count;
+    updateData.emailChecksThisWeek = checksThisWeek + count;
+    updateData.emailChecksThisMonth = checksThisMonth + count;
+    updateData.emailLastCheckDate = today;
+    updateData.emailLastCheckWeek = thisWeek;
+    updateData.emailLastCheckMonth = thisMonth;
+  } else {
+    // HLR - update both new and legacy fields for backward compatibility
+    updateData.hlrChecksToday = checksToday + count;
+    updateData.hlrChecksThisWeek = checksThisWeek + count;
+    updateData.hlrChecksThisMonth = checksThisMonth + count;
+    updateData.hlrLastCheckDate = today;
+    updateData.hlrLastCheckWeek = thisWeek;
+    updateData.hlrLastCheckMonth = thisMonth;
+    // Also update legacy fields
+    updateData.checksToday = checksToday + count;
+    updateData.checksThisWeek = checksThisWeek + count;
+    updateData.checksThisMonth = checksThisMonth + count;
+    updateData.lastCheckDate = today;
+    updateData.lastCheckWeek = thisWeek;
+    updateData.lastCheckMonth = thisMonth;
+  }
+  
+  await db.update(users).set(updateData).where(eq(users.id, userId));
 }
 
 export async function updateUserLimits(
   userId: number, 
   limits: {
+    // HLR limits
+    hlrDailyLimit?: number | null;
+    hlrWeeklyLimit?: number | null;
+    hlrMonthlyLimit?: number | null;
+    hlrBatchLimit?: number | null;
+    // Email limits
+    emailDailyLimit?: number | null;
+    emailWeeklyLimit?: number | null;
+    emailMonthlyLimit?: number | null;
+    emailBatchLimit?: number | null;
+    // Legacy fields (for backward compatibility)
     dailyLimit?: number | null;
     weeklyLimit?: number | null;
     monthlyLimit?: number | null;
@@ -1287,4 +1342,211 @@ export async function deleteSetting(key: string): Promise<void> {
   if (!db) throw new Error("Database not available");
   
   await db.delete(systemSettings).where(eq(systemSettings.key, key));
+}
+
+
+// ============================================
+// Email Validation Operations
+// ============================================
+
+export async function createEmailBatch(data: {
+  userId: number;
+  name: string;
+  totalEmails: number;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(emailBatches).values({
+    userId: data.userId,
+    name: data.name,
+    totalEmails: data.totalEmails,
+    processedEmails: 0,
+    validEmails: 0,
+    invalidEmails: 0,
+    riskyEmails: 0,
+    unknownEmails: 0,
+    status: "processing",
+  });
+  
+  return result[0].insertId;
+}
+
+export async function updateEmailBatchProgress(
+  batchId: number,
+  processed: number,
+  valid: number,
+  invalid: number,
+  risky: number,
+  unknown: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(emailBatches)
+    .set({
+      processedEmails: processed,
+      validEmails: valid,
+      invalidEmails: invalid,
+      riskyEmails: risky,
+      unknownEmails: unknown,
+    })
+    .where(eq(emailBatches.id, batchId));
+}
+
+export async function completeEmailBatch(batchId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(emailBatches)
+    .set({
+      status: "completed",
+      completedAt: new Date(),
+    })
+    .where(eq(emailBatches.id, batchId));
+}
+
+export async function getEmailBatchesByUser(userId: number): Promise<EmailBatch[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(emailBatches)
+    .where(eq(emailBatches.userId, userId))
+    .orderBy(desc(emailBatches.createdAt));
+}
+
+export async function getEmailBatchById(batchId: number): Promise<EmailBatch | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select()
+    .from(emailBatches)
+    .where(eq(emailBatches.id, batchId))
+    .limit(1);
+  
+  return results[0] || null;
+}
+
+export async function deleteEmailBatch(batchId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Delete results first
+  await db.delete(emailResults).where(eq(emailResults.batchId, batchId));
+  // Then delete batch
+  await db.delete(emailBatches).where(eq(emailBatches.id, batchId));
+}
+
+export async function saveEmailResult(data: {
+  batchId: number;
+  email: string;
+  quality: string;
+  result: string;
+  resultCode: number;
+  subresult: string;
+  isFree: boolean;
+  isRole: boolean;
+  didYouMean: string;
+  executionTime: number;
+  error?: string;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(emailResults).values({
+    batchId: data.batchId,
+    email: data.email,
+    quality: data.quality,
+    result: data.result,
+    resultCode: data.resultCode,
+    subresult: data.subresult,
+    isFree: data.isFree,
+    isRole: data.isRole,
+    didYouMean: data.didYouMean,
+    executionTime: data.executionTime,
+    error: data.error || null,
+  });
+  
+  return result[0].insertId;
+}
+
+export async function getEmailResultsByBatch(batchId: number): Promise<EmailResult[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(emailResults)
+    .where(eq(emailResults.batchId, batchId))
+    .orderBy(emailResults.id);
+}
+
+// Email cache operations
+export async function getEmailFromCache(email: string): Promise<EmailCache | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select()
+    .from(emailCache)
+    .where(and(
+      eq(emailCache.email, email.toLowerCase()),
+      gte(emailCache.expiresAt, new Date())
+    ))
+    .limit(1);
+  
+  return results[0] || null;
+}
+
+export async function saveEmailToCache(data: {
+  email: string;
+  quality: string;
+  result: string;
+  resultCode: number;
+  subresult: string;
+  isFree: boolean;
+  isRole: boolean;
+  didYouMean: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Cache for 30 days
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  
+  try {
+    await db.insert(emailCache).values({
+      email: data.email.toLowerCase(),
+      quality: data.quality,
+      result: data.result,
+      resultCode: data.resultCode,
+      subresult: data.subresult,
+      isFree: data.isFree,
+      isRole: data.isRole,
+      didYouMean: data.didYouMean,
+      expiresAt,
+    });
+  } catch (error) {
+    // Ignore duplicate key errors
+  }
+}
+
+export async function getEmailsFromCacheBulk(emails: string[]): Promise<Map<string, EmailCache>> {
+  const db = await getDb();
+  if (!db) return new Map();
+  
+  const lowerEmails = emails.map(e => e.toLowerCase());
+  const results = await db.select()
+    .from(emailCache)
+    .where(and(
+      inArray(emailCache.email, lowerEmails),
+      gte(emailCache.expiresAt, new Date())
+    ));
+  
+  const cacheMap = new Map<string, EmailCache>();
+  for (const result of results) {
+    cacheMap.set(result.email.toLowerCase(), result);
+  }
+  
+  return cacheMap;
 }

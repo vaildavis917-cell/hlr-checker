@@ -69,12 +69,24 @@ import {
   getSetting,
   setSetting,
   getAllSettings,
+  createEmailBatch,
+  updateEmailBatchProgress,
+  completeEmailBatch,
+  getEmailBatchesByUser,
+  getEmailBatchById,
+  deleteEmailBatch,
+  saveEmailResult,
+  getEmailResultsByBatch,
+  getEmailFromCache,
+  saveEmailToCache,
+  getEmailsFromCacheBulk,
 } from "./db";
 import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
 import { InsertHlrResult, PERMISSIONS, PERMISSION_DESCRIPTIONS, DEFAULT_PERMISSIONS, Permission } from "../drizzle/schema";
 import { analyzeBatch, normalizePhoneNumber } from "./phoneUtils";
+import { verifyEmail, getCredits, getResultStatus, RESULT_DESCRIPTIONS, SUBRESULT_DESCRIPTIONS } from "./millionverifier";
 import * as XLSX from "xlsx";
 
 // Seven.io HLR API response type
@@ -336,22 +348,60 @@ const adminRouter = router({
       return { success: true };
     }),
 
-  // Update user limits
+  // Update user limits (supports separate HLR and Email limits)
   updateUserLimits: adminProcedure
     .input(z.object({ 
-      userId: z.number(), 
-      dailyLimit: z.number().nullable(), 
-      monthlyLimit: z.number().nullable(),
+      userId: z.number(),
+      // HLR limits
+      hlrDailyLimit: z.number().nullable().optional(),
+      hlrWeeklyLimit: z.number().nullable().optional(),
+      hlrMonthlyLimit: z.number().nullable().optional(),
+      hlrBatchLimit: z.number().nullable().optional(),
+      // Email limits
+      emailDailyLimit: z.number().nullable().optional(),
+      emailWeeklyLimit: z.number().nullable().optional(),
+      emailMonthlyLimit: z.number().nullable().optional(),
+      emailBatchLimit: z.number().nullable().optional(),
+      // Legacy fields (for backward compatibility)
+      dailyLimit: z.number().nullable().optional(), 
+      monthlyLimit: z.number().nullable().optional(),
       weeklyLimit: z.number().nullable().optional(),
       batchLimit: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      await updateUserLimits(input.userId, {
-        dailyLimit: input.dailyLimit,
-        weeklyLimit: input.weeklyLimit,
-        monthlyLimit: input.monthlyLimit,
-        batchLimit: input.batchLimit,
-      });
+      const limits: any = {};
+      
+      // HLR limits
+      if (input.hlrDailyLimit !== undefined) limits.hlrDailyLimit = input.hlrDailyLimit;
+      if (input.hlrWeeklyLimit !== undefined) limits.hlrWeeklyLimit = input.hlrWeeklyLimit;
+      if (input.hlrMonthlyLimit !== undefined) limits.hlrMonthlyLimit = input.hlrMonthlyLimit;
+      if (input.hlrBatchLimit !== undefined) limits.hlrBatchLimit = input.hlrBatchLimit;
+      
+      // Email limits
+      if (input.emailDailyLimit !== undefined) limits.emailDailyLimit = input.emailDailyLimit;
+      if (input.emailWeeklyLimit !== undefined) limits.emailWeeklyLimit = input.emailWeeklyLimit;
+      if (input.emailMonthlyLimit !== undefined) limits.emailMonthlyLimit = input.emailMonthlyLimit;
+      if (input.emailBatchLimit !== undefined) limits.emailBatchLimit = input.emailBatchLimit;
+      
+      // Legacy fields (also update for backward compatibility)
+      if (input.dailyLimit !== undefined) {
+        limits.dailyLimit = input.dailyLimit;
+        limits.hlrDailyLimit = input.dailyLimit;
+      }
+      if (input.weeklyLimit !== undefined) {
+        limits.weeklyLimit = input.weeklyLimit;
+        limits.hlrWeeklyLimit = input.weeklyLimit;
+      }
+      if (input.monthlyLimit !== undefined) {
+        limits.monthlyLimit = input.monthlyLimit;
+        limits.hlrMonthlyLimit = input.monthlyLimit;
+      }
+      if (input.batchLimit !== undefined) {
+        limits.batchLimit = input.batchLimit;
+        limits.hlrBatchLimit = input.batchLimit;
+      }
+      
+      await updateUserLimits(input.userId, limits);
       await logAction({ userId: ctx.user.id, action: "update_limits", details: `Updated limits for user ${input.userId}` });
       return { success: true };
     }),
@@ -832,10 +882,341 @@ const exportTemplatesRouter = router({
   }),
 });
 
+// Email validation router
+const emailRouter = router({
+  // Get MillionVerifier balance (credits)
+  getBalance: protectedProcedure.query(async () => {
+    const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+    if (!apiKey) {
+      return { credits: 0, error: "API key not configured" };
+    }
+    try {
+      const credits = await getCredits(apiKey);
+      return { credits };
+    } catch (error) {
+      return { credits: 0, error: error instanceof Error ? error.message : "Unknown error" };
+    }
+  }),
+
+  // Verify single email
+  checkSingle: protectedProcedure
+    .input(z.object({ email: z.string().email() }))
+    .mutation(async ({ ctx, input }) => {
+      // Check permission
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.single");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission for email check" });
+      }
+
+      const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API key not configured" });
+      }
+
+      // Check cache first
+      const cached = await getEmailFromCache(input.email);
+      if (cached) {
+        return {
+          email: input.email,
+          quality: cached.quality || "unknown",
+          result: cached.result || "unknown",
+          resultCode: cached.resultCode || 0,
+          subresult: cached.subresult || "",
+          isFree: cached.isFree || false,
+          isRole: cached.isRole || false,
+          didYouMean: cached.didYouMean || "",
+          status: getResultStatus(cached.result || "unknown"),
+          fromCache: true,
+        };
+      }
+
+      // Check email limits
+      const limitsCheck = await checkUserLimits(ctx.user.id, 1, 'email');
+      if (!limitsCheck.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Email limit exceeded" });
+      }
+
+      // Verify email
+      const result = await verifyEmail(input.email, apiKey);
+      
+      // Increment email checks counter
+      await incrementUserChecks(ctx.user.id, 1, 'email');
+
+      // Save to cache
+      await saveEmailToCache({
+        email: input.email,
+        quality: result.quality,
+        result: result.result,
+        resultCode: result.resultcode,
+        subresult: result.subresult,
+        isFree: result.free,
+        isRole: result.role,
+        didYouMean: result.didyoumean,
+      });
+
+      return {
+        email: result.email,
+        quality: result.quality,
+        result: result.result,
+        resultCode: result.resultcode,
+        subresult: result.subresult,
+        isFree: result.free,
+        isRole: result.role,
+        didYouMean: result.didyoumean,
+        credits: result.credits,
+        status: getResultStatus(result.result),
+        fromCache: false,
+      };
+    }),
+
+  // Start batch email verification
+  startBatch: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      emails: z.array(z.string()).min(1).max(10000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check permission
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.batch");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission for batch email check" });
+      }
+
+      const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API key not configured" });
+      }
+
+      // Filter valid emails
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const validEmails = input.emails.filter(e => emailRegex.test(e.trim()));
+      if (validEmails.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No valid emails provided" });
+      }
+
+      // Check email limits
+      const limitsCheck = await checkUserLimits(ctx.user.id, validEmails.length, 'email');
+      if (!limitsCheck.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Email limit exceeded" });
+      }
+
+      // Create batch
+      const batchId = await createEmailBatch({
+        userId: ctx.user.id,
+        name: input.name,
+        totalEmails: validEmails.length,
+      });
+
+      // Check cache for existing results
+      const cacheMap = await getEmailsFromCacheBulk(validEmails);
+
+      // Process emails
+      let processed = 0;
+      let valid = 0;
+      let invalid = 0;
+      let risky = 0;
+      let unknown = 0;
+
+      for (const email of validEmails) {
+        const trimmedEmail = email.trim().toLowerCase();
+        
+        // Check if cached
+        const cached = cacheMap.get(trimmedEmail);
+        if (cached) {
+          // Use cached result
+          await saveEmailResult({
+            batchId,
+            email: trimmedEmail,
+            quality: cached.quality || "unknown",
+            result: cached.result || "unknown",
+            resultCode: cached.resultCode || 0,
+            subresult: cached.subresult || "",
+            isFree: cached.isFree || false,
+            isRole: cached.isRole || false,
+            didYouMean: cached.didYouMean || "",
+            executionTime: 0,
+          });
+
+          const status = getResultStatus(cached.result || "unknown");
+          if (status === "valid") valid++;
+          else if (status === "invalid") invalid++;
+          else if (status === "risky") risky++;
+          else unknown++;
+        } else {
+          // Verify via API
+          try {
+            const result = await verifyEmail(trimmedEmail, apiKey);
+
+            await saveEmailResult({
+              batchId,
+              email: result.email,
+              quality: result.quality,
+              result: result.result,
+              resultCode: result.resultcode,
+              subresult: result.subresult,
+              isFree: result.free,
+              isRole: result.role,
+              didYouMean: result.didyoumean,
+              executionTime: result.executiontime,
+            });
+
+            // Save to cache
+            await saveEmailToCache({
+              email: trimmedEmail,
+              quality: result.quality,
+              result: result.result,
+              resultCode: result.resultcode,
+              subresult: result.subresult,
+              isFree: result.free,
+              isRole: result.role,
+              didYouMean: result.didyoumean,
+            });
+
+            const status = getResultStatus(result.result);
+            if (status === "valid") valid++;
+            else if (status === "invalid") invalid++;
+            else if (status === "risky") risky++;
+            else unknown++;
+          } catch (error) {
+            // Save error result
+            await saveEmailResult({
+              batchId,
+              email: trimmedEmail,
+              quality: "bad",
+              result: "error",
+              resultCode: 0,
+              subresult: "",
+              isFree: false,
+              isRole: false,
+              didYouMean: "",
+              executionTime: 0,
+              error: error instanceof Error ? error.message : "Unknown error",
+            });
+            invalid++;
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        processed++;
+        await updateEmailBatchProgress(batchId, processed, valid, invalid, risky, unknown);
+      }
+
+      await completeEmailBatch(batchId);
+      
+      // Increment email checks counter (only for non-cached emails)
+      const apiCallCount = validEmails.length - Array.from(cacheMap.keys()).length;
+      if (apiCallCount > 0) {
+        await incrementUserChecks(ctx.user.id, apiCallCount, 'email');
+      }
+
+      return {
+        batchId,
+        totalEmails: validEmails.length,
+        processed,
+        valid,
+        invalid,
+        risky,
+        unknown,
+      };
+    }),
+
+  // Get user's email batches
+  listBatches: protectedProcedure.query(async ({ ctx }) => {
+    const hasPermission = await userHasPermission(ctx.user.id, "hlr.history");
+    if (!hasPermission) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "No permission to view history" });
+    }
+    return await getEmailBatchesByUser(ctx.user.id);
+  }),
+
+  // Get batch details with results
+  getBatch: protectedProcedure
+    .input(z.object({ batchId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const results = await getEmailResultsByBatch(input.batchId);
+      return { batch, results };
+    }),
+
+  // Delete batch
+  deleteBatch: protectedProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.delete");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to delete" });
+      }
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      await deleteEmailBatch(input.batchId);
+      return { success: true };
+    }),
+
+  // Export batch to Excel
+  exportXlsx: protectedProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.export");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export" });
+      }
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      const results = await getEmailResultsByBatch(input.batchId);
+
+      const data = results.map(r => ({
+        Email: r.email,
+        Quality: r.quality,
+        Result: r.result,
+        Subresult: r.subresult,
+        "Free Provider": r.isFree ? "Yes" : "No",
+        "Role Email": r.isRole ? "Yes" : "No",
+        "Did You Mean": r.didYouMean || "",
+        Error: r.error || "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Email Results");
+      const buffer = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+
+      return {
+        filename: `email_results_${batch.name}_${new Date().toISOString().split("T")[0]}.xlsx`,
+        data: buffer,
+      };
+    }),
+
+  // Get result descriptions for UI
+  getDescriptions: publicProcedure.query(() => ({
+    results: RESULT_DESCRIPTIONS,
+    subresults: SUBRESULT_DESCRIPTIONS,
+  })),
+});
+
 export const appRouter = router({
   system: systemRouter,
   admin: adminRouter,
   exportTemplates: exportTemplatesRouter,
+  email: emailRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     

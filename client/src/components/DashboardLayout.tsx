@@ -125,7 +125,7 @@ function DashboardLayoutContent({
               <Layers className="h-5 w-5 text-primary" />
             </div>
             {!isCollapsed && (
-              <span className="font-bold text-lg tracking-tight">HLR Pro</span>
+              <span className="font-bold text-lg tracking-tight">DataCheck Pro</span>
             )}
           </div>
         </SidebarHeader>

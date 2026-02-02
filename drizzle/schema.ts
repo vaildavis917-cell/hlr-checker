@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -76,25 +76,70 @@ export const users = mysqlTable("users", {
   failedLoginAttempts: int("failedLoginAttempts").default(0).notNull(),
   /** Account locked until this time */
   lockedUntil: timestamp("lockedUntil"),
-  /** Daily check limit (null = unlimited) */
+  // ===== HLR Limits =====
+  /** Daily HLR check limit (null = unlimited) */
+  hlrDailyLimit: int("hlrDailyLimit"),
+  /** Weekly HLR check limit (null = unlimited) */
+  hlrWeeklyLimit: int("hlrWeeklyLimit"),
+  /** Monthly HLR check limit (null = unlimited) */
+  hlrMonthlyLimit: int("hlrMonthlyLimit"),
+  /** Per-batch HLR limit (null = unlimited) */
+  hlrBatchLimit: int("hlrBatchLimit"),
+  /** HLR checks used today */
+  hlrChecksToday: int("hlrChecksToday").default(0).notNull(),
+  /** HLR checks used this week */
+  hlrChecksThisWeek: int("hlrChecksThisWeek").default(0).notNull(),
+  /** HLR checks used this month */
+  hlrChecksThisMonth: int("hlrChecksThisMonth").default(0).notNull(),
+  /** Last HLR check date for daily reset */
+  hlrLastCheckDate: varchar("hlrLastCheckDate", { length: 10 }),
+  /** Last HLR check week for weekly reset (ISO week number) */
+  hlrLastCheckWeek: varchar("hlrLastCheckWeek", { length: 10 }),
+  /** Last HLR check month for monthly reset */
+  hlrLastCheckMonth: varchar("hlrLastCheckMonth", { length: 7 }),
+  
+  // ===== Email Limits =====
+  /** Daily Email check limit (null = unlimited) */
+  emailDailyLimit: int("emailDailyLimit"),
+  /** Weekly Email check limit (null = unlimited) */
+  emailWeeklyLimit: int("emailWeeklyLimit"),
+  /** Monthly Email check limit (null = unlimited) */
+  emailMonthlyLimit: int("emailMonthlyLimit"),
+  /** Per-batch Email limit (null = unlimited) */
+  emailBatchLimit: int("emailBatchLimit"),
+  /** Email checks used today */
+  emailChecksToday: int("emailChecksToday").default(0).notNull(),
+  /** Email checks used this week */
+  emailChecksThisWeek: int("emailChecksThisWeek").default(0).notNull(),
+  /** Email checks used this month */
+  emailChecksThisMonth: int("emailChecksThisMonth").default(0).notNull(),
+  /** Last Email check date for daily reset */
+  emailLastCheckDate: varchar("emailLastCheckDate", { length: 10 }),
+  /** Last Email check week for weekly reset (ISO week number) */
+  emailLastCheckWeek: varchar("emailLastCheckWeek", { length: 10 }),
+  /** Last Email check month for monthly reset */
+  emailLastCheckMonth: varchar("emailLastCheckMonth", { length: 7 }),
+  
+  // ===== Legacy fields (for backward compatibility) =====
+  /** @deprecated Use hlrDailyLimit instead */
   dailyLimit: int("dailyLimit"),
-  /** Weekly check limit (null = unlimited) */
+  /** @deprecated Use hlrWeeklyLimit instead */
   weeklyLimit: int("weeklyLimit"),
-  /** Monthly check limit (null = unlimited) */
+  /** @deprecated Use hlrMonthlyLimit instead */
   monthlyLimit: int("monthlyLimit"),
-  /** Per-batch limit (null = unlimited) */
+  /** @deprecated Use hlrBatchLimit instead */
   batchLimit: int("batchLimit"),
-  /** Checks used today */
+  /** @deprecated Use hlrChecksToday instead */
   checksToday: int("checksToday").default(0).notNull(),
-  /** Checks used this week */
+  /** @deprecated Use hlrChecksThisWeek instead */
   checksThisWeek: int("checksThisWeek").default(0).notNull(),
-  /** Checks used this month */
+  /** @deprecated Use hlrChecksThisMonth instead */
   checksThisMonth: int("checksThisMonth").default(0).notNull(),
-  /** Last check date for daily reset */
+  /** @deprecated Use hlrLastCheckDate instead */
   lastCheckDate: varchar("lastCheckDate", { length: 10 }),
-  /** Last check week for weekly reset (ISO week number) */
+  /** @deprecated Use hlrLastCheckWeek instead */
   lastCheckWeek: varchar("lastCheckWeek", { length: 10 }),
-  /** Last check month for monthly reset */
+  /** @deprecated Use hlrLastCheckMonth instead */
   lastCheckMonth: varchar("lastCheckMonth", { length: 7 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -319,3 +364,94 @@ export const systemSettings = mysqlTable("system_settings", {
 });
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type InsertSystemSetting = typeof systemSettings.$inferInsert;
+
+
+/**
+ * Email validation batches
+ */
+export const emailBatches = mysqlTable("email_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  /** User who created the batch */
+  userId: int("userId").notNull(),
+  /** Batch name */
+  name: varchar("name", { length: 256 }).notNull(),
+  /** Total emails in batch */
+  totalEmails: int("totalEmails").notNull().default(0),
+  /** Processed emails count */
+  processedEmails: int("processedEmails").notNull().default(0),
+  /** Valid emails count */
+  validEmails: int("validEmails").notNull().default(0),
+  /** Invalid emails count */
+  invalidEmails: int("invalidEmails").notNull().default(0),
+  /** Risky emails count (catch_all, disposable) */
+  riskyEmails: int("riskyEmails").notNull().default(0),
+  /** Unknown emails count */
+  unknownEmails: int("unknownEmails").notNull().default(0),
+  /** Batch status */
+  status: varchar("status", { length: 32 }).notNull().default("pending"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+export type EmailBatch = typeof emailBatches.$inferSelect;
+export type InsertEmailBatch = typeof emailBatches.$inferInsert;
+
+/**
+ * Email validation results
+ */
+export const emailResults = mysqlTable("email_results", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Batch ID */
+  batchId: int("batchId").notNull(),
+  /** Email address */
+  email: varchar("email", { length: 320 }).notNull(),
+  /** Quality: good, bad, unknown */
+  quality: varchar("quality", { length: 32 }),
+  /** Result: ok, catch_all, unknown, invalid, disposable, error */
+  result: varchar("result", { length: 32 }),
+  /** Result code */
+  resultCode: int("resultCode"),
+  /** Subresult details */
+  subresult: varchar("subresult", { length: 64 }),
+  /** Is free email provider */
+  isFree: boolean("isFree").default(false),
+  /** Is role-based email (info@, support@) */
+  isRole: boolean("isRole").default(false),
+  /** Did you mean suggestion */
+  didYouMean: varchar("didYouMean", { length: 320 }),
+  /** Execution time in ms */
+  executionTime: int("executionTime"),
+  /** Error message if any */
+  error: text("error"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EmailResult = typeof emailResults.$inferSelect;
+export type InsertEmailResult = typeof emailResults.$inferInsert;
+
+/**
+ * Email cache - stores previous verification results to avoid duplicate API calls
+ */
+export const emailCache = mysqlTable("email_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Email address (unique) */
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  /** Quality: good, bad, unknown */
+  quality: varchar("quality", { length: 32 }),
+  /** Result: ok, catch_all, unknown, invalid, disposable, error */
+  result: varchar("result", { length: 32 }),
+  /** Result code */
+  resultCode: int("resultCode"),
+  /** Subresult details */
+  subresult: varchar("subresult", { length: 64 }),
+  /** Is free email provider */
+  isFree: boolean("isFree").default(false),
+  /** Is role-based email */
+  isRole: boolean("isRole").default(false),
+  /** Did you mean suggestion */
+  didYouMean: varchar("didYouMean", { length: 320 }),
+  /** When the cache entry was created */
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  /** When the cache entry expires (30 days) */
+  expiresAt: timestamp("expiresAt").notNull(),
+});
+export type EmailCache = typeof emailCache.$inferSelect;
+export type InsertEmailCache = typeof emailCache.$inferInsert;

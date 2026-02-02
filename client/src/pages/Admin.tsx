@@ -96,6 +96,17 @@ export default function Admin() {
   // Limits dialog state
   const [isLimitsDialogOpen, setIsLimitsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  // HLR limits
+  const [hlrDailyLimit, setHlrDailyLimit] = useState(0);
+  const [hlrWeeklyLimit, setHlrWeeklyLimit] = useState(0);
+  const [hlrMonthlyLimit, setHlrMonthlyLimit] = useState(0);
+  const [hlrBatchLimit, setHlrBatchLimit] = useState(0);
+  // Email limits
+  const [emailDailyLimit, setEmailDailyLimit] = useState(0);
+  const [emailWeeklyLimit, setEmailWeeklyLimit] = useState(0);
+  const [emailMonthlyLimit, setEmailMonthlyLimit] = useState(0);
+  const [emailBatchLimit, setEmailBatchLimit] = useState(0);
+  // Legacy (for backward compatibility display)
   const [dailyLimit, setDailyLimit] = useState(0);
   const [weeklyLimit, setWeeklyLimit] = useState(0);
   const [monthlyLimit, setMonthlyLimit] = useState(0);
@@ -225,6 +236,18 @@ export default function Admin() {
 
   const openLimitsDialog = (u: User) => {
     setSelectedUser(u);
+    const userData = u as any;
+    // HLR limits (new fields first, then legacy fallback)
+    setHlrDailyLimit(userData.hlrDailyLimit ?? u.dailyLimit ?? 0);
+    setHlrWeeklyLimit(userData.hlrWeeklyLimit ?? u.weeklyLimit ?? 0);
+    setHlrMonthlyLimit(userData.hlrMonthlyLimit ?? u.monthlyLimit ?? 0);
+    setHlrBatchLimit(userData.hlrBatchLimit ?? u.batchLimit ?? 0);
+    // Email limits
+    setEmailDailyLimit(userData.emailDailyLimit ?? 0);
+    setEmailWeeklyLimit(userData.emailWeeklyLimit ?? 0);
+    setEmailMonthlyLimit(userData.emailMonthlyLimit ?? 0);
+    setEmailBatchLimit(userData.emailBatchLimit ?? 0);
+    // Legacy
     setDailyLimit(u.dailyLimit || 0);
     setWeeklyLimit(u.weeklyLimit || 0);
     setMonthlyLimit(u.monthlyLimit || 0);
@@ -237,10 +260,16 @@ export default function Admin() {
     try {
       await updateLimitsMutation.mutateAsync({
         userId: selectedUser.id,
-        dailyLimit: dailyLimit || null,
-        weeklyLimit: weeklyLimit || null,
-        monthlyLimit: monthlyLimit || null,
-        batchLimit: batchLimit || null,
+        // HLR limits
+        hlrDailyLimit: hlrDailyLimit || null,
+        hlrWeeklyLimit: hlrWeeklyLimit || null,
+        hlrMonthlyLimit: hlrMonthlyLimit || null,
+        hlrBatchLimit: hlrBatchLimit || null,
+        // Email limits
+        emailDailyLimit: emailDailyLimit || null,
+        emailWeeklyLimit: emailWeeklyLimit || null,
+        emailMonthlyLimit: emailMonthlyLimit || null,
+        emailBatchLimit: emailBatchLimit || null,
       });
       usersQuery.refetch();
       setIsLimitsDialogOpen(false);
@@ -554,7 +583,7 @@ export default function Admin() {
 
         {/* Limits Dialog */}
         <Dialog open={isLimitsDialogOpen} onOpenChange={setIsLimitsDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{t.admin.setUserLimits}</DialogTitle>
               <DialogDescription>
@@ -562,55 +591,115 @@ export default function Admin() {
                 {t.admin.zeroUnlimited}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="dailyLimit">{t.admin.dailyLimit}</Label>
-                  <Input
-                    id="dailyLimit"
-                    type="number"
-                    min="0"
-                    value={dailyLimit}
-                    onChange={(e) => setDailyLimit(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="weeklyLimit">{t.admin.weeklyLimit || "Недельный лимит"}</Label>
-                  <Input
-                    id="weeklyLimit"
-                    type="number"
-                    min="0"
-                    value={weeklyLimit}
-                    onChange={(e) => setWeeklyLimit(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
+            <div className="space-y-6 py-4">
+              {/* HLR Limits */}
+              <div>
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <Badge variant="outline">HLR</Badge>
+                  {t.admin?.hlrLimits || "Лимиты HLR"}
+                </h4>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="hlrDailyLimit" className="text-xs">{t.admin.dailyLimit}</Label>
+                    <Input
+                      id="hlrDailyLimit"
+                      type="number"
+                      min="0"
+                      value={hlrDailyLimit}
+                      onChange={(e) => setHlrDailyLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="hlrWeeklyLimit" className="text-xs">{t.admin.weeklyLimit || "Недельный"}</Label>
+                    <Input
+                      id="hlrWeeklyLimit"
+                      type="number"
+                      min="0"
+                      value={hlrWeeklyLimit}
+                      onChange={(e) => setHlrWeeklyLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="hlrMonthlyLimit" className="text-xs">{t.admin.monthlyLimit}</Label>
+                    <Input
+                      id="hlrMonthlyLimit"
+                      type="number"
+                      min="0"
+                      value={hlrMonthlyLimit}
+                      onChange={(e) => setHlrMonthlyLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="hlrBatchLimit" className="text-xs">{t.admin.batchLimit || "На партию"}</Label>
+                    <Input
+                      id="hlrBatchLimit"
+                      type="number"
+                      min="0"
+                      value={hlrBatchLimit}
+                      onChange={(e) => setHlrBatchLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="monthlyLimit">{t.admin.monthlyLimit}</Label>
-                  <Input
-                    id="monthlyLimit"
-                    type="number"
-                    min="0"
-                    value={monthlyLimit}
-                    onChange={(e) => setMonthlyLimit(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="batchLimit">{t.admin.batchLimit || "Лимит на партию"}</Label>
-                  <Input
-                    id="batchLimit"
-                    type="number"
-                    min="0"
-                    value={batchLimit}
-                    onChange={(e) => setBatchLimit(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
+              
+              {/* Email Limits */}
+              <div>
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <Badge variant="outline">Email</Badge>
+                  {t.admin?.emailLimits || "Лимиты Email"}
+                </h4>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="emailDailyLimit" className="text-xs">{t.admin.dailyLimit}</Label>
+                    <Input
+                      id="emailDailyLimit"
+                      type="number"
+                      min="0"
+                      value={emailDailyLimit}
+                      onChange={(e) => setEmailDailyLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="emailWeeklyLimit" className="text-xs">{t.admin.weeklyLimit || "Недельный"}</Label>
+                    <Input
+                      id="emailWeeklyLimit"
+                      type="number"
+                      min="0"
+                      value={emailWeeklyLimit}
+                      onChange={(e) => setEmailWeeklyLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="emailMonthlyLimit" className="text-xs">{t.admin.monthlyLimit}</Label>
+                    <Input
+                      id="emailMonthlyLimit"
+                      type="number"
+                      min="0"
+                      value={emailMonthlyLimit}
+                      onChange={(e) => setEmailMonthlyLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="emailBatchLimit" className="text-xs">{t.admin.batchLimit || "На партию"}</Label>
+                    <Input
+                      id="emailBatchLimit"
+                      type="number"
+                      min="0"
+                      value={emailBatchLimit}
+                      onChange={(e) => setEmailBatchLimit(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
                 </div>
               </div>
+              
               <p className="text-xs text-muted-foreground">{t.admin.zeroUnlimited}</p>
             </div>
             <DialogFooter>

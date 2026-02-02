@@ -1,4 +1,4 @@
-// Multi-language localization for HLR Checker
+// Multi-language localization for DataCheck Pro
 // Supported languages: Russian (ru), Ukrainian (uk), English (en)
 
 export type Language = "ru" | "uk" | "en";
@@ -75,7 +75,7 @@ const translations = {
       password: "Пароль",
       enterUsername: "Введите имя пользователя",
       enterPassword: "Введите пароль",
-      signInToAccess: "Войдите для доступа к HLR Checker",
+      signInToAccess: "Войдите для доступа к DataCheck Pro",
       contactAdmin: "Свяжитесь с администратором для получения аккаунта",
       invalidCredentials: "Неверное имя пользователя или пароль",
       accountLocked: "Аккаунт заблокирован. Попробуйте через 15 минут.",
@@ -131,7 +131,7 @@ const translations = {
     
     // Home page
     home: {
-      title: "HLR Checker",
+      title: "DataCheck Pro",
       subtitle: "Проверка телефонных номеров",
       apiBalance: "Баланс API",
       quickCheck: "Быстрая проверка",
@@ -343,7 +343,7 @@ const translations = {
     // Admin page
     admin: {
       title: "Панель администратора",
-      subtitle: "Управление пользователями HLR Checker",
+      subtitle: "Управление пользователями DataCheck Pro",
       accessDenied: "Доступ запрещён",
       accessDeniedDesc: "У вас нет прав для доступа к панели администратора.",
       goToDashboard: "Перейти на главную",
@@ -405,6 +405,8 @@ const translations = {
       lastActivity: "Последняя активность",
       expired: "Истекла",
       sessionActive: "Активна",
+      hlrLimits: "Лимиты HLR",
+      emailLimits: "Лимиты Email",
     },
     
     // Permissions page
@@ -501,6 +503,51 @@ const translations = {
       invalidNumbers: "Невалидных",
       checksUsed: "проверок",
     },
+    
+    // Email Validator
+    email: {
+      title: "Email Валидатор",
+      description: "Проверка email адресов на доставляемость",
+      credits: "кредитов",
+      singleCheck: "Одиночная проверка",
+      batchCheck: "Массовая проверка",
+      history: "История",
+      checkSingleEmail: "Проверить один email",
+      enterEmailToVerify: "Введите email адрес для проверки доставляемости",
+      verify: "Проверить",
+      result: "Результат",
+      subresult: "Подробности",
+      freeProvider: "Бесплатный провайдер",
+      roleEmail: "Служебный email",
+      didYouMean: "Возможно, вы имели в виду",
+      batchVerification: "Массовая проверка",
+      uploadOrPaste: "Загрузите файл или вставьте email адреса",
+      batchName: "Название проверки",
+      pasteEmails: "Вставьте email адреса (по одному в строке или через запятую/точку с запятой)",
+      emails: "email адресов",
+      processing: "Обработка...",
+      startVerification: "Начать проверку",
+      verificationHistory: "История проверок",
+      noBatches: "Проверок пока нет",
+      valid: "Валидный",
+      invalid: "Невалидный",
+      risky: "Рискованный",
+      unknown: "Неизвестно",
+      noEmails: "Email адреса не указаны",
+      enterBatchName: "Введите название проверки",
+      batchCompleted: "Проверка завершена",
+      // Limits
+      dailyUsage: "Сегодня",
+      weeklyUsage: "На этой неделе",
+      monthlyUsage: "В этом месяце",
+      available: "доступно",
+      usageLimits: "Лимиты Email",
+      unlimited: "без лимита",
+      dailyLimitReached: "Дневной лимит Email исчерпан",
+      weeklyLimitReached: "Недельный лимит Email исчерпан",
+      monthlyLimitReached: "Месячный лимит Email исчерпан",
+      batchLimit: "Макс. email в партии",
+    },
   },
   
   uk: {
@@ -562,7 +609,7 @@ const translations = {
       password: "Пароль",
       enterUsername: "Введіть ім'я користувача",
       enterPassword: "Введіть пароль",
-      signInToAccess: "Увійдіть для доступу до HLR Checker",
+      signInToAccess: "Увійдіть для доступу до DataCheck Pro",
       contactAdmin: "Зверніться до адміністратора для отримання облікового запису",
       invalidCredentials: "Невірне ім'я користувача або пароль",
       accountLocked: "Обліковий запис заблоковано. Спробуйте через 15 хвилин.",
@@ -618,7 +665,7 @@ const translations = {
     
     // Home page
     home: {
-      title: "HLR Checker",
+      title: "DataCheck Pro",
       subtitle: "Перевірка телефонних номерів",
       apiBalance: "Баланс API",
       quickCheck: "Швидка перевірка",
@@ -830,7 +877,7 @@ const translations = {
     // Admin page
     admin: {
       title: "Панель адміністратора",
-      subtitle: "Управління користувачами HLR Checker",
+      subtitle: "Управління користувачами DataCheck Pro",
       accessDenied: "Доступ заборонено",
       accessDeniedDesc: "У вас немає прав для доступу до панелі адміністратора.",
       goToDashboard: "Перейти на головну",
@@ -892,6 +939,8 @@ const translations = {
       lastActivity: "Остання активність",
       expired: "Закінчилася",
       sessionActive: "Активна",
+      hlrLimits: "Ліміти HLR",
+      emailLimits: "Ліміти Email",
     },
     
     // Permissions page
@@ -988,6 +1037,51 @@ const translations = {
       invalidNumbers: "Невалідних",
       checksUsed: "перевірок",
     },
+    
+    // Email Validator
+    email: {
+      title: "Email Валідатор",
+      description: "Перевірка email адрес на доставляємість",
+      credits: "кредитів",
+      singleCheck: "Одинична перевірка",
+      batchCheck: "Масова перевірка",
+      history: "Історія",
+      checkSingleEmail: "Перевірити один email",
+      enterEmailToVerify: "Введіть email адресу для перевірки доставляємості",
+      verify: "Перевірити",
+      result: "Результат",
+      subresult: "Подробиці",
+      freeProvider: "Безкоштовний провайдер",
+      roleEmail: "Службовий email",
+      didYouMean: "Можливо, ви мали на увазі",
+      batchVerification: "Масова перевірка",
+      uploadOrPaste: "Завантажте файл або вставте email адреси",
+      batchName: "Назва перевірки",
+      pasteEmails: "Вставте email адреси (по одній в рядку або через кому/крапку з комою)",
+      emails: "email адрес",
+      processing: "Обробка...",
+      startVerification: "Почати перевірку",
+      verificationHistory: "Історія перевірок",
+      noBatches: "Перевірок поки немає",
+      valid: "Валідний",
+      invalid: "Невалідний",
+      risky: "Ризикований",
+      unknown: "Невідомо",
+      noEmails: "Email адреси не вказані",
+      enterBatchName: "Введіть назву перевірки",
+      batchCompleted: "Перевірку завершено",
+      // Limits
+      dailyUsage: "Сьогодні",
+      weeklyUsage: "Цього тижня",
+      monthlyUsage: "Цього місяця",
+      available: "доступно",
+      usageLimits: "Ліміти Email",
+      unlimited: "без ліміту",
+      dailyLimitReached: "Денний ліміт Email вичерпано",
+      weeklyLimitReached: "Тижневий ліміт Email вичерпано",
+      monthlyLimitReached: "Місячний ліміт Email вичерпано",
+      batchLimit: "Макс. email в партії",
+    },
   },
   
   en: {
@@ -1049,7 +1143,7 @@ const translations = {
       password: "Password",
       enterUsername: "Enter username",
       enterPassword: "Enter password",
-      signInToAccess: "Sign in to access HLR Checker",
+      signInToAccess: "Sign in to access DataCheck Pro",
       contactAdmin: "Contact administrator to get an account",
       invalidCredentials: "Invalid username or password",
       accountLocked: "Account locked. Try again in 15 minutes.",
@@ -1105,7 +1199,7 @@ const translations = {
     
     // Home page
     home: {
-      title: "HLR Checker",
+      title: "DataCheck Pro",
       subtitle: "Phone number verification",
       apiBalance: "API Balance",
       quickCheck: "Quick Check",
@@ -1317,7 +1411,7 @@ const translations = {
     // Admin page
     admin: {
       title: "Admin Panel",
-      subtitle: "Manage HLR Checker users",
+      subtitle: "Manage DataCheck Pro users",
       accessDenied: "Access Denied",
       accessDeniedDesc: "You don't have permission to access the admin panel.",
       goToDashboard: "Go to Dashboard",
@@ -1379,6 +1473,8 @@ const translations = {
       lastActivity: "Last Activity",
       expired: "Expired",
       sessionActive: "Active",
+      hlrLimits: "HLR Limits",
+      emailLimits: "Email Limits",
     },
     
     // Permissions page
@@ -1474,6 +1570,51 @@ const translations = {
       validNumbers: "Valid",
       invalidNumbers: "Invalid",
       checksUsed: "checks",
+    },
+    
+    // Email Validator
+    email: {
+      title: "Email Validator",
+      description: "Verify email addresses for deliverability",
+      credits: "credits",
+      singleCheck: "Single Check",
+      batchCheck: "Batch Check",
+      history: "History",
+      checkSingleEmail: "Check Single Email",
+      enterEmailToVerify: "Enter an email address to verify its deliverability",
+      verify: "Verify",
+      result: "Result",
+      subresult: "Subresult",
+      freeProvider: "Free Provider",
+      roleEmail: "Role Email",
+      didYouMean: "Did you mean",
+      batchVerification: "Batch Verification",
+      uploadOrPaste: "Upload a file or paste email addresses",
+      batchName: "Batch name",
+      pasteEmails: "Paste emails here (one per line, or comma/semicolon separated)",
+      emails: "emails",
+      processing: "Processing...",
+      startVerification: "Start Verification",
+      verificationHistory: "Verification History",
+      noBatches: "No batches yet",
+      valid: "Valid",
+      invalid: "Invalid",
+      risky: "Risky",
+      unknown: "Unknown",
+      noEmails: "No emails provided",
+      enterBatchName: "Enter batch name",
+      batchCompleted: "Batch completed",
+      // Limits
+      dailyUsage: "Today",
+      weeklyUsage: "This week",
+      monthlyUsage: "This month",
+      available: "available",
+      usageLimits: "Email Limits",
+      unlimited: "unlimited",
+      dailyLimitReached: "Daily Email limit reached",
+      weeklyLimitReached: "Weekly Email limit reached",
+      monthlyLimitReached: "Monthly Email limit reached",
+      batchLimit: "Max. emails per batch",
     },
   },
 };

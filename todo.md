@@ -1,4 +1,4 @@
-# HLR Bulk Checker - TODO
+# DataCheck Pro - TODO
 
 ## Core Features
 - [x] Database schema for API keys, check history, and results
@@ -348,3 +348,16 @@
 - [x] Поддержка форматов Excel (.xlsx, .xls) и CSV
 - [x] Визуальная индикация при перетаскивании файла
 - [x] Переводы (RU/UK/EN)
+
+## Email Validator (MillionVerifier)
+- [x] Добавить API ключ MillionVerifier в настройки
+- [x] Создать модуль для работы с MillionVerifier API
+- [x] Создать таблицу email_batches и email_results в БД
+- [x] UI страница для валидации email (аналогично HLR)
+- [x] Поддержка single и batch проверки
+- [x] История проверок email
+- [x] Экспорт результатов в Excel
+- [x] Переводы (RU/UK/EN)
+- [x] Раздельные лимиты для HLR и Email (daily, weekly, monthly, batch)
+- [x] UI для настройки раздельных лимитов в админ-панели
+- [x] Переименовать приложение в DataCheck Pro

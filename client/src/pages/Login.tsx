@@ -51,14 +51,14 @@ export default function Login() {
   // SEO: Set page title and meta description
   useEffect(() => {
     document.title = isSetupMode 
-      ? "Первоначальная настройка - HLR Bulk Checker"
+      ? "Первоначальная настройка - DataCheck Pro"
       : showRequestForm
-        ? "Запрос доступа - HLR Bulk Checker"
-        : "Вход - HLR Bulk Checker";
+        ? "Запрос доступа - DataCheck Pro"
+        : "Вход - DataCheck Pro";
     
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Войдите в HLR Bulk Checker для проверки телефонных номеров, информации об операторе, статуса роуминга и портирования.');
+      metaDescription.setAttribute('content', 'Войдите в DataCheck Pro для проверки телефонных номеров и email адресов.');
     }
   }, [isSetupMode, showRequestForm]);
 
