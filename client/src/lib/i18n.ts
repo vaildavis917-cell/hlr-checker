@@ -116,7 +116,7 @@ const translations = {
     nav: {
       dashboard: "Панель управления",
       hlrLookup: "HLR Проверка",
-      batchChecker: "Массовая проверка",
+      batchChecker: "HLR Массовая",
       emailLookup: "Email Проверка",
       emailBatch: "Email Массовая",
       settings: "Настройки",
@@ -652,7 +652,7 @@ const translations = {
     nav: {
       dashboard: "Панель керування",
       hlrLookup: "HLR Перевірка",
-      batchChecker: "Масова перевірка",
+      batchChecker: "HLR Масова",
       emailLookup: "Email Перевірка",
       emailBatch: "Email Масова",
       settings: "Налаштування",
@@ -1188,7 +1188,7 @@ const translations = {
     nav: {
       dashboard: "Dashboard",
       hlrLookup: "HLR Lookup",
-      batchChecker: "Batch Checker",
+      batchChecker: "HLR Batch",
       emailLookup: "Email Lookup",
       emailBatch: "Email Batch",
       settings: "Settings",
