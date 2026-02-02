@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
+import FileDropZone from "@/components/FileDropZone";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
@@ -57,7 +58,7 @@ export default function Home() {
 
   // SEO: Set page title and meta description
   useEffect(() => {
-    document.title = "HLR Checker - Проверка номеров";
+    document.title = "DataCheck Pro - HLR и Email проверка номеров";
     const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Сервис HLR проверки телефонных номеров, информации об операторе, статуса роуминга и портирования.');
@@ -87,7 +88,6 @@ export default function Home() {
   const singleCheckMutation = trpc.hlr.checkSingle.useMutation();
   
   // API queries
-  const balanceQuery = trpc.hlr.getBalance.useQuery(undefined, { enabled: isAdmin });
   const userStatsQuery = trpc.hlr.getUserStats.useQuery();
   
   // Check if any batch is currently processing
@@ -416,7 +416,7 @@ export default function Home() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">HLR Checker</h1>
+          <h1 className="text-3xl font-bold tracking-tight">DataCheck Pro</h1>
           <h2 className="sr-only">Сервис проверки телефонных номеров</h2>
         </div>
 
@@ -477,24 +477,6 @@ export default function Home() {
         )}
 
         {/* Balance Card - Admin Only */}
-        {isAdmin && (
-          <div className="flex items-center gap-4 p-4 rounded-lg border bg-card">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Wallet className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.home.apiBalance}</p>
-              <p className="text-xl font-semibold">
-                {balanceQuery.isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  `${balanceQuery.data?.balance?.toFixed(2) || "0.00"} ${balanceQuery.data?.currency || "EUR"}`
-                )}
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* User Limits Card with Progress Bars */}
         {userStatsQuery.data && (
           <Card>
@@ -511,19 +493,19 @@ export default function Home() {
                   <span className="text-sm font-medium">{t.home.dailyUsage || "Сегодня"}</span>
                   <span className="text-sm text-muted-foreground">
                     {userStatsQuery.data.checksToday}
-                    {userStatsQuery.data.limits.dailyLimit > 0 
+                    {(userStatsQuery.data.limits.dailyLimit ?? 0) > 0 
                       ? ` / ${userStatsQuery.data.limits.dailyLimit}`
                       : ` (${t.home.unlimited || "без лимита"})`
                     }
                   </span>
                 </div>
-                {userStatsQuery.data.limits.dailyLimit > 0 ? (
+                {(userStatsQuery.data.limits.dailyLimit ?? 0) > 0 ? (
                   <>
                     <Progress 
-                      value={(userStatsQuery.data.checksToday / userStatsQuery.data.limits.dailyLimit) * 100} 
-                      className={`h-2 ${userStatsQuery.data.checksToday >= userStatsQuery.data.limits.dailyLimit ? '[&>div]:bg-red-500' : ''}`}
+                      value={(userStatsQuery.data.checksToday / (userStatsQuery.data.limits.dailyLimit ?? 1)) * 100} 
+                      className={`h-2 ${userStatsQuery.data.checksToday >= (userStatsQuery.data.limits.dailyLimit ?? 0) ? '[&>div]:bg-red-500' : ''}`}
                     />
-                    {userStatsQuery.data.checksToday >= userStatsQuery.data.limits.dailyLimit && (
+                    {userStatsQuery.data.checksToday >= (userStatsQuery.data.limits.dailyLimit ?? 0) && (
                       <div className="flex items-center gap-2 text-red-500 text-sm">
                         <AlertCircle className="h-4 w-4" />
                         {t.home.dailyLimitReached || "Дневной лимит исчерпан"}
@@ -535,25 +517,47 @@ export default function Home() {
                 )}
               </div>
 
+              {/* Weekly Limit */}
+              {(userStatsQuery.data.limits.weeklyLimit ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{t.home.weeklyUsage || "На этой неделе"}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {userStatsQuery.data.checksThisWeek} / {userStatsQuery.data.limits.weeklyLimit}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(userStatsQuery.data.checksThisWeek / (userStatsQuery.data.limits.weeklyLimit ?? 1)) * 100} 
+                    className={`h-2 ${userStatsQuery.data.checksThisWeek >= (userStatsQuery.data.limits.weeklyLimit ?? 0) ? '[&>div]:bg-red-500' : ''}`}
+                  />
+                  {userStatsQuery.data.checksThisWeek >= (userStatsQuery.data.limits.weeklyLimit ?? 0) && (
+                    <div className="flex items-center gap-2 text-red-500 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      {t.home.weeklyLimitReached || "Недельный лимит исчерпан"}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Monthly Limit */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">{t.home.monthlyUsage || "В этом месяце"}</span>
                   <span className="text-sm text-muted-foreground">
                     {userStatsQuery.data.checksThisMonth}
-                    {userStatsQuery.data.limits.monthlyLimit > 0 
+                    {(userStatsQuery.data.limits.monthlyLimit ?? 0) > 0 
                       ? ` / ${userStatsQuery.data.limits.monthlyLimit}`
                       : ` (${t.home.unlimited || "без лимита"})`
                     }
                   </span>
                 </div>
-                {userStatsQuery.data.limits.monthlyLimit > 0 ? (
+                {(userStatsQuery.data.limits.monthlyLimit ?? 0) > 0 ? (
                   <>
                     <Progress 
-                      value={(userStatsQuery.data.checksThisMonth / userStatsQuery.data.limits.monthlyLimit) * 100} 
-                      className={`h-2 ${userStatsQuery.data.checksThisMonth >= userStatsQuery.data.limits.monthlyLimit ? '[&>div]:bg-red-500' : ''}`}
+                      value={(userStatsQuery.data.checksThisMonth / (userStatsQuery.data.limits.monthlyLimit ?? 1)) * 100} 
+                      className={`h-2 ${userStatsQuery.data.checksThisMonth >= (userStatsQuery.data.limits.monthlyLimit ?? 0) ? '[&>div]:bg-red-500' : ''}`}
                     />
-                    {userStatsQuery.data.checksThisMonth >= userStatsQuery.data.limits.monthlyLimit && (
+                    {userStatsQuery.data.checksThisMonth >= (userStatsQuery.data.limits.monthlyLimit ?? 0) && (
                       <div className="flex items-center gap-2 text-red-500 text-sm">
                         <AlertCircle className="h-4 w-4" />
                         {t.home.monthlyLimitReached || "Месячный лимит исчерпан"}
@@ -565,15 +569,17 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Estimated checks for unlimited users */}
-              {userStatsQuery.data.limits.dailyLimit === 0 && isAdmin && balanceQuery.data?.balance && (
+              {/* Batch Limit Info */}
+              {(userStatsQuery.data.limits.batchLimit ?? 0) > 0 && (
                 <div className="pt-2 border-t">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{t.home.estimatedChecks || "Примерно доступно проверок"}</span>
-                    <span className="font-medium text-green-500">~{Math.floor(balanceQuery.data.balance / 0.01)}</span>
+                    <span className="text-muted-foreground">{t.home.batchLimit || "Макс. номеров в партии"}</span>
+                    <span className="font-medium">{userStatsQuery.data.limits.batchLimit}</span>
                   </div>
                 </div>
               )}
+
+
             </CardContent>
           </Card>
         )}
@@ -692,23 +698,17 @@ export default function Home() {
                   </div>
                 </TabsContent>
                 <TabsContent value="file" className="space-y-4">
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                    <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
-                    <Label htmlFor="file-upload" className="cursor-pointer">
-                      <span className="text-primary hover:underline">{t.home.clickToUpload}</span>
-                      <span className="text-muted-foreground"> {t.home.orDragDrop}</span>
-                    </Label>
-                    <Input
-                      id="file-upload"
-                      type="file"
-                      accept=".csv,.txt"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {t.home.csvOrTxt}
-                    </p>
-                  </div>
+                  <FileDropZone
+                    onFileLoaded={(numbers, fileName) => {
+                      if (numbers.length === 0) {
+                        toast.error(t.home.noNumbersInFile || "Файл не содержит номеров");
+                        return;
+                      }
+                      setPhoneInput(numbers.join("\n"));
+                      toast.success(`${t.home.loaded || "Загружено"} ${numbers.length} ${t.home.numbersLoaded || "номеров из файла"}`);
+                    }}
+                    disabled={isProcessing}
+                  />
                   {phoneInput && (
                     <p className="text-sm text-muted-foreground">
                       {phoneCount} {t.home.numbersLoaded}

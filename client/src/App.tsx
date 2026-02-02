@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { AutoLogoutProvider } from "./contexts/AutoLogoutContext";
 import Home from "./pages/Home";
 import History from "./pages/History";
 import Admin from "./pages/Admin";
@@ -15,6 +16,15 @@ import Dashboard from "./pages/Dashboard";
 import HlrLookup from "./pages/HlrLookup";
 import SettingsPage from "./pages/Settings";
 import HelpCenter from "./pages/HelpCenter";
+import Sessions from "./pages/Sessions";
+import LoginHistory from "./pages/LoginHistory";
+import AuditLog from "./pages/AuditLog";
+import Permissions from "./pages/Permissions";
+import AccessRequests from "./pages/AccessRequests";
+import TelegramSettings from "./pages/TelegramSettings";
+import EmailValidator from "./pages/EmailValidator";
+import EmailLookup from "./pages/EmailLookup";
+import AdminEmailHistory from "./pages/AdminEmailHistory";
 
 function Router() {
   return (
@@ -31,6 +41,15 @@ function Router() {
       <Route path={"/statistics"} component={Statistics} />
       <Route path={"/tools"} component={Tools} />
       <Route path={"/help"} component={HelpCenter} />
+      <Route path={"/sessions"} component={Sessions} />
+      <Route path={"/login-history"} component={LoginHistory} />
+      <Route path={"/admin/audit"} component={AuditLog} />
+      <Route path={"/admin/permissions"} component={Permissions} />
+      <Route path={"/admin/requests"} component={AccessRequests} />
+      <Route path={"/admin/telegram"} component={TelegramSettings} />
+      <Route path={"/email"} component={EmailValidator} />
+      <Route path={"/email-lookup"} component={EmailLookup} />
+      <Route path={"/admin/email-history"} component={AdminEmailHistory} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -45,8 +64,10 @@ function App() {
         switchable
       >
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <AutoLogoutProvider>
+            <Toaster />
+            <Router />
+          </AutoLogoutProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

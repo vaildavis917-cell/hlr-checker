@@ -31,5 +31,5 @@ describe("Seven.io API Key Validation", () => {
     
     // API should return something (balance or JSON)
     expect(responseText.length).toBeGreaterThan(0);
-  });
+  }, 15000);
 });

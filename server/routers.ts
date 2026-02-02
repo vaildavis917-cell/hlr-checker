@@ -1,5 +1,6 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, TWELVE_HOURS_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { registerActiveBatch, updateBatchProgress, unregisterBatch, isShutdownInProgress } from "./_core/index";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
@@ -22,6 +23,7 @@ import {
   updateUserPassword,
   logAction,
   getActionLogs,
+  countActionLogs,
   checkUserLimits,
   incrementUserChecks,
   updateUserLimits,
@@ -44,11 +46,48 @@ import {
   getCachedResult,
   getCheckedPhoneNumbersInBatch,
   getIncompleteBatches,
+  createSession as createDbSession,
+  getSessionsByUserId,
+  deleteSession,
+  deleteAllUserSessions,
+  getSessionByToken,
+  updateSessionActivity,
+  getRolePermissions,
+  getAllRolePermissions,
+  setRolePermissions,
+  getUserEffectivePermissions,
+  setUserCustomPermissions,
+  userHasPermission,
+  createAccessRequest,
+  getAccessRequestById,
+  getAccessRequestByEmail,
+  getAllAccessRequests,
+  getPendingAccessRequestsCount,
+  approveAccessRequest,
+  rejectAccessRequest,
+  deleteAccessRequest,
+  getSetting,
+  setSetting,
+  getAllSettings,
+  createEmailBatch,
+  updateEmailBatchProgress,
+  completeEmailBatch,
+  getEmailBatchesByUser,
+  getEmailBatchById,
+  deleteEmailBatch,
+  saveEmailResult,
+  getEmailResultsByBatch,
+  getEmailFromCache,
+  saveEmailToCache,
+  getEmailsFromCacheBulk,
+  getAllEmailBatches,
 } from "./db";
+import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
 import { TRPCError } from "@trpc/server";
-import { InsertHlrResult } from "../drizzle/schema";
+import { InsertHlrResult, PERMISSIONS, PERMISSION_DESCRIPTIONS, DEFAULT_PERMISSIONS, Permission } from "../drizzle/schema";
 import { analyzeBatch, normalizePhoneNumber } from "./phoneUtils";
+import { verifyEmail, getCredits, getResultStatus, RESULT_DESCRIPTIONS, SUBRESULT_DESCRIPTIONS } from "./millionverifier";
 import * as XLSX from "xlsx";
 
 // Seven.io HLR API response type
@@ -106,34 +145,91 @@ export const EXPORT_FIELDS = [
   { key: "errorMessage", label: "Error Message" },
 ] as const;
 
-// Function to perform HLR lookup via Seven.io API
-async function performHlrLookup(phoneNumber: string): Promise<SevenIoHlrResponse | { error: string }> {
+// Retry configuration
+const RETRY_CONFIG = {
+  maxAttempts: 3,
+  baseDelayMs: 1000, // 1 second
+  maxDelayMs: 10000, // 10 seconds
+};
+
+// Sleep helper
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Calculate exponential backoff delay
+function getRetryDelay(attempt: number): number {
+  const delay = RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1);
+  // Add jitter (±20%)
+  const jitter = delay * 0.2 * (Math.random() - 0.5);
+  return Math.min(delay + jitter, RETRY_CONFIG.maxDelayMs);
+}
+
+// Check if error is retryable
+function isRetryableError(status: number): boolean {
+  // Retry on: 429 (rate limit), 500, 502, 503, 504 (server errors)
+  return status === 429 || (status >= 500 && status <= 504);
+}
+
+// Function to perform HLR lookup via Seven.io API with retry logic
+async function performHlrLookup(
+  phoneNumber: string,
+  onRetry?: (attempt: number, error: string, delayMs: number) => void
+): Promise<SevenIoHlrResponse | { error: string; retryAttempts?: number }> {
   const apiKey = process.env.SEVEN_IO_API_KEY;
   if (!apiKey) {
     return { error: "API key not configured" };
   }
 
-  try {
-    const response = await fetch(
-      `https://gateway.seven.io/api/lookup/hlr?number=${encodeURIComponent(phoneNumber)}`,
-      {
-        method: "GET",
-        headers: {
-          "X-Api-Key": apiKey,
-          "Accept": "application/json",
-        },
+  let lastError = "Unknown error";
+  
+  for (let attempt = 1; attempt <= RETRY_CONFIG.maxAttempts; attempt++) {
+    try {
+      const response = await fetch(
+        `https://gateway.seven.io/api/lookup/hlr?number=${encodeURIComponent(phoneNumber)}`,
+        {
+          method: "GET",
+          headers: {
+            "X-Api-Key": apiKey,
+            "Accept": "application/json",
+          },
+        }
+      );
+
+      // Success
+      if (response.ok) {
+        const data = await response.json();
+        return data as SevenIoHlrResponse;
       }
-    );
 
-    if (!response.ok) {
-      return { error: `API error: ${response.status} ${response.statusText}` };
+      // Non-retryable error
+      if (!isRetryableError(response.status)) {
+        return { error: `API error: ${response.status} ${response.statusText}` };
+      }
+
+      // Retryable error - prepare for retry
+      lastError = `API error: ${response.status} ${response.statusText}`;
+      
+      if (attempt < RETRY_CONFIG.maxAttempts) {
+        const delayMs = getRetryDelay(attempt);
+        onRetry?.(attempt, lastError, delayMs);
+        await sleep(delayMs);
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Unknown error";
+      
+      // Network errors are retryable
+      if (attempt < RETRY_CONFIG.maxAttempts) {
+        const delayMs = getRetryDelay(attempt);
+        onRetry?.(attempt, lastError, delayMs);
+        await sleep(delayMs);
+      }
     }
-
-    const data = await response.json();
-    return data as SevenIoHlrResponse;
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unknown error" };
   }
+
+  // All retries exhausted
+  return { 
+    error: `${lastError} (after ${RETRY_CONFIG.maxAttempts} attempts)`,
+    retryAttempts: RETRY_CONFIG.maxAttempts
+  };
 }
 
 // Detect duplicates in phone number list
@@ -160,9 +256,9 @@ function detectDuplicates(phoneNumbers: string[]): { unique: string[]; duplicate
   return { unique, duplicates };
 }
 
-// Admin-only procedure
+// Admin-only procedure (admin and manager roles)
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "manager") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
   }
   return next({ ctx });
@@ -182,7 +278,7 @@ const adminRouter = router({
       password: z.string().min(6).max(128),
       name: z.string().optional(),
       email: z.string().email().optional(),
-      role: z.enum(["user", "admin"]).default("user"),
+      role: z.enum(["user", "admin", "manager", "viewer"]).default("user"),
     }))
     .mutation(async ({ input }) => {
       // Check if username already exists
@@ -215,7 +311,7 @@ const adminRouter = router({
 
   // Update user role
   updateUserRole: adminProcedure
-    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
+    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin", "manager", "viewer"]) }))
     .mutation(async ({ ctx, input }) => {
       if (input.userId === ctx.user.id && input.role !== "admin") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot demote yourself" });
@@ -253,15 +349,60 @@ const adminRouter = router({
       return { success: true };
     }),
 
-  // Update user limits
+  // Update user limits (supports separate HLR and Email limits)
   updateUserLimits: adminProcedure
     .input(z.object({ 
-      userId: z.number(), 
-      dailyLimit: z.number().nullable(), 
-      monthlyLimit: z.number().nullable() 
+      userId: z.number(),
+      // HLR limits
+      hlrDailyLimit: z.number().nullable().optional(),
+      hlrWeeklyLimit: z.number().nullable().optional(),
+      hlrMonthlyLimit: z.number().nullable().optional(),
+      hlrBatchLimit: z.number().nullable().optional(),
+      // Email limits
+      emailDailyLimit: z.number().nullable().optional(),
+      emailWeeklyLimit: z.number().nullable().optional(),
+      emailMonthlyLimit: z.number().nullable().optional(),
+      emailBatchLimit: z.number().nullable().optional(),
+      // Legacy fields (for backward compatibility)
+      dailyLimit: z.number().nullable().optional(), 
+      monthlyLimit: z.number().nullable().optional(),
+      weeklyLimit: z.number().nullable().optional(),
+      batchLimit: z.number().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      await updateUserLimits(input.userId, input.dailyLimit, input.monthlyLimit);
+      const limits: any = {};
+      
+      // HLR limits
+      if (input.hlrDailyLimit !== undefined) limits.hlrDailyLimit = input.hlrDailyLimit;
+      if (input.hlrWeeklyLimit !== undefined) limits.hlrWeeklyLimit = input.hlrWeeklyLimit;
+      if (input.hlrMonthlyLimit !== undefined) limits.hlrMonthlyLimit = input.hlrMonthlyLimit;
+      if (input.hlrBatchLimit !== undefined) limits.hlrBatchLimit = input.hlrBatchLimit;
+      
+      // Email limits
+      if (input.emailDailyLimit !== undefined) limits.emailDailyLimit = input.emailDailyLimit;
+      if (input.emailWeeklyLimit !== undefined) limits.emailWeeklyLimit = input.emailWeeklyLimit;
+      if (input.emailMonthlyLimit !== undefined) limits.emailMonthlyLimit = input.emailMonthlyLimit;
+      if (input.emailBatchLimit !== undefined) limits.emailBatchLimit = input.emailBatchLimit;
+      
+      // Legacy fields (also update for backward compatibility)
+      if (input.dailyLimit !== undefined) {
+        limits.dailyLimit = input.dailyLimit;
+        limits.hlrDailyLimit = input.dailyLimit;
+      }
+      if (input.weeklyLimit !== undefined) {
+        limits.weeklyLimit = input.weeklyLimit;
+        limits.hlrWeeklyLimit = input.weeklyLimit;
+      }
+      if (input.monthlyLimit !== undefined) {
+        limits.monthlyLimit = input.monthlyLimit;
+        limits.hlrMonthlyLimit = input.monthlyLimit;
+      }
+      if (input.batchLimit !== undefined) {
+        limits.batchLimit = input.batchLimit;
+        limits.hlrBatchLimit = input.batchLimit;
+      }
+      
+      await updateUserLimits(input.userId, limits);
       await logAction({ userId: ctx.user.id, action: "update_limits", details: `Updated limits for user ${input.userId}` });
       return { success: true };
     }),
@@ -270,7 +411,7 @@ const adminRouter = router({
   getActionLogs: adminProcedure
     .input(z.object({ userId: z.number().optional(), limit: z.number().default(100) }))
     .query(async ({ input }) => {
-      return await getActionLogs(input.userId, input.limit);
+      return await getActionLogs({ userId: input.userId, limit: input.limit });
     }),
 
   // Get all statistics
@@ -351,6 +492,326 @@ const adminRouter = router({
       });
       return { success: true };
     }),
+
+  // =====================
+  // Permissions Management
+  // =====================
+
+  // Get all available permissions
+  getAvailablePermissions: adminProcedure.query(() => {
+    return {
+      permissions: PERMISSIONS,
+      descriptions: PERMISSION_DESCRIPTIONS,
+      defaults: DEFAULT_PERMISSIONS,
+    };
+  }),
+
+  // Get all role permissions (custom + defaults)
+  getAllRolePermissions: adminProcedure.query(async () => {
+    const customPermissions = await getAllRolePermissions();
+    const roles = ['viewer', 'user', 'manager', 'admin'];
+    
+    return roles.map(role => {
+      const custom = customPermissions.find(p => p.role === role);
+      return {
+        role,
+        permissions: custom?.permissions || DEFAULT_PERMISSIONS[role] || [],
+        description: custom?.description || null,
+        isCustom: !!custom,
+      };
+    });
+  }),
+
+  // Get permissions for a specific role
+  getRolePermissions: adminProcedure
+    .input(z.object({ role: z.string() }))
+    .query(async ({ input }) => {
+      const permissions = await getRolePermissions(input.role);
+      return { role: input.role, permissions };
+    }),
+
+  // Update permissions for a role
+  setRolePermissions: adminProcedure
+    .input(z.object({
+      role: z.string(),
+      permissions: z.array(z.string()),
+      description: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Validate permissions
+      const validPermissions = input.permissions.filter(p => 
+        PERMISSIONS.includes(p as Permission)
+      ) as Permission[];
+      
+      await setRolePermissions(input.role, validPermissions, input.description);
+      await logAction({
+        userId: ctx.user.id,
+        action: "update_role_permissions",
+        details: `Updated permissions for role '${input.role}': ${validPermissions.join(', ')}`,
+      });
+      return { success: true };
+    }),
+
+  // Reset role permissions to defaults
+  resetRolePermissions: adminProcedure
+    .input(z.object({ role: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { deleteRolePermissions } = await import("./db");
+      await deleteRolePermissions(input.role);
+      await logAction({
+        userId: ctx.user.id,
+        action: "reset_role_permissions",
+        details: `Reset permissions for role '${input.role}' to defaults`,
+      });
+      return { success: true, defaults: DEFAULT_PERMISSIONS[input.role] || [] };
+    }),
+
+  // Get user's effective permissions
+  getUserPermissions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const permissions = await getUserEffectivePermissions(input.userId);
+      return { userId: input.userId, permissions };
+    }),
+
+  // Set custom permissions for a user (overrides role)
+  setUserCustomPermissions: adminProcedure
+    .input(z.object({
+      userId: z.number(),
+      permissions: z.array(z.string()).nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.permissions) {
+        const validPermissions = input.permissions.filter(p => 
+          PERMISSIONS.includes(p as Permission)
+        ) as Permission[];
+        await setUserCustomPermissions(input.userId, validPermissions);
+        await logAction({
+          userId: ctx.user.id,
+          action: "set_user_permissions",
+          details: `Set custom permissions for user #${input.userId}: ${validPermissions.join(', ')}`,
+        });
+      } else {
+        await setUserCustomPermissions(input.userId, null);
+        await logAction({
+          userId: ctx.user.id,
+          action: "clear_user_permissions",
+          details: `Cleared custom permissions for user #${input.userId}, now using role defaults`,
+        });
+      }
+      return { success: true };
+    }),
+
+  // Access Requests Management
+  getAccessRequests: adminProcedure
+    .input(z.object({ status: z.enum(["pending", "approved", "rejected"]).optional() }))
+    .query(async ({ input }) => {
+      return await getAllAccessRequests(input.status);
+    }),
+
+  getPendingRequestsCount: adminProcedure.query(async () => {
+    return await getPendingAccessRequestsCount();
+  }),
+
+  approveAccessRequest: adminProcedure
+    .input(z.object({
+      requestId: z.number(),
+      username: z.string().min(3).max(64),
+      password: z.string().min(6).max(128),
+      role: z.enum(["user", "admin", "manager", "viewer"]).default("user"),
+      comment: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const request = await getAccessRequestById(input.requestId);
+      if (!request) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+      }
+      if (request.status !== "pending") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Request already processed" });
+      }
+      
+      // Check if username already exists
+      const existingUser = await getUserByUsername(input.username);
+      if (existingUser) {
+        throw new TRPCError({ code: "CONFLICT", message: "Username already exists" });
+      }
+      
+      // Create user
+      const userId = await createUser({
+        username: input.username,
+        password: input.password,
+        name: request.name,
+        email: request.email || undefined,
+        role: input.role,
+      });
+      
+      // Approve request
+      await approveAccessRequest(input.requestId, ctx.user.id, userId, input.comment);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "approve_access_request",
+        details: `Approved access request #${input.requestId}, created user #${userId} (${input.username})`,
+      });
+      
+      return { success: true, userId };
+    }),
+
+  rejectAccessRequest: adminProcedure
+    .input(z.object({
+      requestId: z.number(),
+      comment: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const request = await getAccessRequestById(input.requestId);
+      if (!request) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+      }
+      if (request.status !== "pending") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Request already processed" });
+      }
+      
+      await rejectAccessRequest(input.requestId, ctx.user.id, input.comment);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "reject_access_request",
+        details: `Rejected access request #${input.requestId} (${request.email})`,
+      });
+      
+      return { success: true };
+    }),
+
+  deleteAccessRequest: adminProcedure
+    .input(z.object({ requestId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await deleteAccessRequest(input.requestId);
+      await logAction({
+        userId: ctx.user.id,
+        action: "delete_access_request",
+        details: `Deleted access request #${input.requestId}`,
+      });
+      return { success: true };
+    }),
+
+  // Get all sessions for a specific user (admin only)
+  getUserSessions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const sessions = await getSessionsByUserId(input.userId);
+      return sessions.map(s => ({
+        id: s.id,
+        deviceInfo: s.deviceInfo,
+        browser: s.browser,
+        os: s.os,
+        ipAddress: s.ipAddress,
+        location: s.location,
+        lastActivity: s.lastActivity,
+        createdAt: s.createdAt,
+        expiresAt: s.expiresAt,
+        isExpired: new Date(s.expiresAt) < new Date(),
+      }));
+    }),
+
+  // Terminate a specific session for any user (admin only)
+  terminateUserSession: adminProcedure
+    .input(z.object({ sessionId: z.number(), userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const sessions = await getSessionsByUserId(input.userId);
+      const session = sessions.find(s => s.id === input.sessionId);
+      
+      if (!session) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      }
+      
+      await deleteSession(input.sessionId);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_terminate_session",
+        details: `Admin terminated session ${input.sessionId} for user ${input.userId}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true };
+    }),
+
+  // Terminate all sessions for a specific user (admin only)
+  terminateAllUserSessions: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const count = await deleteAllUserSessions(input.userId);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_terminate_all_sessions",
+        details: `Admin terminated ${count} sessions for user ${input.userId}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true, count };
+    }),
+
+  // Get Telegram settings
+  getTelegramSettings: adminProcedure.query(async () => {
+    const botToken = await getSetting("telegram_bot_token");
+    const chatId = await getSetting("telegram_chat_id");
+    return {
+      botToken: botToken ? "***" + botToken.slice(-4) : null, // Mask token for security
+      chatId,
+      isConfigured: !!(botToken && chatId),
+    };
+  }),
+
+  // Save Telegram settings
+  saveTelegramSettings: adminProcedure
+    .input(z.object({
+      botToken: z.string().min(1),
+      chatId: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await setSetting("telegram_bot_token", input.botToken, "Telegram Bot API Token");
+      await setSetting("telegram_chat_id", input.chatId, "Telegram Chat ID for notifications");
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_update_telegram_settings",
+        details: "Updated Telegram notification settings",
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true };
+    }),
+
+  // Test Telegram connection
+  testTelegramConnection: adminProcedure
+    .input(z.object({
+      botToken: z.string().min(1),
+      chatId: z.string().min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const result = await testTelegramConnection(input.botToken, input.chatId);
+      return result;
+    }),
+
+  // Clear Telegram settings
+  clearTelegramSettings: adminProcedure.mutation(async ({ ctx }) => {
+    await setSetting("telegram_bot_token", "", "Telegram Bot API Token");
+    await setSetting("telegram_chat_id", "", "Telegram Chat ID for notifications");
+    
+    await logAction({
+      userId: ctx.user.id,
+      action: "admin_clear_telegram_settings",
+      details: "Cleared Telegram notification settings",
+      ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+      userAgent: ctx.req.headers["user-agent"],
+    });
+    
+    return { success: true };
+  }),
 });
 
 // Export templates router
@@ -422,10 +883,419 @@ const exportTemplatesRouter = router({
   }),
 });
 
+// Email validation router
+const emailRouter = router({
+  // Get MillionVerifier balance (credits)
+  getBalance: protectedProcedure.query(async () => {
+    const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+    if (!apiKey) {
+      return { credits: 0, error: "API key not configured" };
+    }
+    try {
+      const credits = await getCredits(apiKey);
+      return { credits };
+    } catch (error) {
+      return { credits: 0, error: error instanceof Error ? error.message : "Unknown error" };
+    }
+  }),
+
+  // Verify single email
+  checkSingle: protectedProcedure
+    .input(z.object({ email: z.string().email() }))
+    .mutation(async ({ ctx, input }) => {
+      // Check permission
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.single");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission for email check" });
+      }
+
+      const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API key not configured" });
+      }
+
+      // Check cache first
+      const cached = await getEmailFromCache(input.email);
+      if (cached) {
+        return {
+          email: input.email,
+          quality: cached.quality || "unknown",
+          result: cached.result || "unknown",
+          resultCode: cached.resultCode || 0,
+          subresult: cached.subresult || "",
+          isFree: cached.isFree || false,
+          isRole: cached.isRole || false,
+          didYouMean: cached.didYouMean || "",
+          status: getResultStatus(cached.result || "unknown"),
+          fromCache: true,
+        };
+      }
+
+      // Check email limits
+      const limitsCheck = await checkUserLimits(ctx.user.id, 1, 'email');
+      if (!limitsCheck.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Email limit exceeded" });
+      }
+
+      // Verify email
+      const result = await verifyEmail(input.email, apiKey);
+      
+      // Increment email checks counter
+      await incrementUserChecks(ctx.user.id, 1, 'email');
+
+      // Log action
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_single",
+        details: `Email: ${input.email}, Result: ${result.result}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
+      // Save to cache
+      await saveEmailToCache({
+        email: input.email,
+        quality: result.quality,
+        result: result.result,
+        resultCode: result.resultcode,
+        subresult: result.subresult,
+        isFree: result.free,
+        isRole: result.role,
+        didYouMean: result.didyoumean,
+      });
+
+      return {
+        email: result.email,
+        quality: result.quality,
+        result: result.result,
+        resultCode: result.resultcode,
+        subresult: result.subresult,
+        isFree: result.free,
+        isRole: result.role,
+        didYouMean: result.didyoumean,
+        credits: result.credits,
+        status: getResultStatus(result.result),
+        fromCache: false,
+      };
+    }),
+
+  // Start batch email verification
+  startBatch: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      emails: z.array(z.string()).min(1).max(10000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check permission
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.batch");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission for batch email check" });
+      }
+
+      const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API key not configured" });
+      }
+
+      // Filter valid emails
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const validEmails = input.emails.filter(e => emailRegex.test(e.trim()));
+      if (validEmails.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No valid emails provided" });
+      }
+
+      // Check email limits
+      const limitsCheck = await checkUserLimits(ctx.user.id, validEmails.length, 'email');
+      if (!limitsCheck.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Email limit exceeded" });
+      }
+
+      // Create batch
+      const batchId = await createEmailBatch({
+        userId: ctx.user.id,
+        name: input.name,
+        totalEmails: validEmails.length,
+      });
+
+      // Log batch start
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_batch_start",
+        details: `Batch: ${input.name}, Emails: ${validEmails.length}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
+      // Check cache for existing results
+      const cacheMap = await getEmailsFromCacheBulk(validEmails);
+
+      // Process emails
+      let processed = 0;
+      let valid = 0;
+      let invalid = 0;
+      let risky = 0;
+      let unknown = 0;
+
+      for (const email of validEmails) {
+        const trimmedEmail = email.trim().toLowerCase();
+        
+        // Check if cached
+        const cached = cacheMap.get(trimmedEmail);
+        if (cached) {
+          // Use cached result
+          await saveEmailResult({
+            batchId,
+            email: trimmedEmail,
+            quality: cached.quality || "unknown",
+            result: cached.result || "unknown",
+            resultCode: cached.resultCode || 0,
+            subresult: cached.subresult || "",
+            isFree: cached.isFree || false,
+            isRole: cached.isRole || false,
+            didYouMean: cached.didYouMean || "",
+            executionTime: 0,
+          });
+
+          const status = getResultStatus(cached.result || "unknown");
+          if (status === "valid") valid++;
+          else if (status === "invalid") invalid++;
+          else if (status === "risky") risky++;
+          else unknown++;
+        } else {
+          // Verify via API
+          try {
+            const result = await verifyEmail(trimmedEmail, apiKey);
+
+            await saveEmailResult({
+              batchId,
+              email: result.email,
+              quality: result.quality,
+              result: result.result,
+              resultCode: result.resultcode,
+              subresult: result.subresult,
+              isFree: result.free,
+              isRole: result.role,
+              didYouMean: result.didyoumean,
+              executionTime: result.executiontime,
+            });
+
+            // Save to cache
+            await saveEmailToCache({
+              email: trimmedEmail,
+              quality: result.quality,
+              result: result.result,
+              resultCode: result.resultcode,
+              subresult: result.subresult,
+              isFree: result.free,
+              isRole: result.role,
+              didYouMean: result.didyoumean,
+            });
+
+            const status = getResultStatus(result.result);
+            if (status === "valid") valid++;
+            else if (status === "invalid") invalid++;
+            else if (status === "risky") risky++;
+            else unknown++;
+          } catch (error) {
+            // Save error result
+            await saveEmailResult({
+              batchId,
+              email: trimmedEmail,
+              quality: "bad",
+              result: "error",
+              resultCode: 0,
+              subresult: "",
+              isFree: false,
+              isRole: false,
+              didYouMean: "",
+              executionTime: 0,
+              error: error instanceof Error ? error.message : "Unknown error",
+            });
+            invalid++;
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        processed++;
+        await updateEmailBatchProgress(batchId, processed, valid, invalid, risky, unknown);
+      }
+
+      await completeEmailBatch(batchId);
+      
+      // Increment email checks counter (only for non-cached emails)
+      const apiCallCount = validEmails.length - Array.from(cacheMap.keys()).length;
+      if (apiCallCount > 0) {
+        await incrementUserChecks(ctx.user.id, apiCallCount, 'email');
+      }
+
+      // Log batch complete
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_batch_complete",
+        details: `Batch: ${input.name}, Valid: ${valid}, Invalid: ${invalid}, Risky: ${risky}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
+      return {
+        batchId,
+        totalEmails: validEmails.length,
+        processed,
+        valid,
+        invalid,
+        risky,
+        unknown,
+      };
+    }),
+
+  // Get user's email batches
+  listBatches: protectedProcedure.query(async ({ ctx }) => {
+    const hasPermission = await userHasPermission(ctx.user.id, "hlr.history");
+    if (!hasPermission) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "No permission to view history" });
+    }
+    return await getEmailBatchesByUser(ctx.user.id);
+  }),
+
+  // Get batch details with results
+  getBatch: protectedProcedure
+    .input(z.object({ batchId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      const results = await getEmailResultsByBatch(input.batchId);
+      return { batch, results };
+    }),
+
+  // Delete batch
+  deleteBatch: protectedProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.delete");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to delete" });
+      }
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      await deleteEmailBatch(input.batchId);
+      return { success: true };
+    }),
+
+  // Export batch to Excel
+  exportXlsx: protectedProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.export");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export" });
+      }
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      const results = await getEmailResultsByBatch(input.batchId);
+
+      const data = results.map(r => ({
+        Email: r.email,
+        Quality: r.quality,
+        Result: r.result,
+        Subresult: r.subresult,
+        "Free Provider": r.isFree ? "Yes" : "No",
+        "Role Email": r.isRole ? "Yes" : "No",
+        "Did You Mean": r.didYouMean || "",
+        Error: r.error || "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Email Results");
+      const buffer = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+
+      return {
+        filename: `email_results_${batch.name}_${new Date().toISOString().split("T")[0]}.xlsx`,
+        data: buffer,
+      };
+    }),
+
+  // Get result descriptions for UI
+  getDescriptions: publicProcedure.query(() => ({
+    results: RESULT_DESCRIPTIONS,
+    subresults: SUBRESULT_DESCRIPTIONS,
+  })),
+
+  // Get email stats for dashboard
+  getStats: protectedProcedure.query(async ({ ctx }) => {
+    const batches = await getEmailBatchesByUser(ctx.user.id);
+    const totalChecks = batches.reduce((sum, b) => sum + (b.totalEmails || 0), 0);
+    const validEmails = batches.reduce((sum, b) => sum + (b.validEmails || 0), 0);
+    const invalidEmails = batches.reduce((sum, b) => sum + (b.invalidEmails || 0), 0);
+    
+    return {
+      totalChecks,
+      validEmails,
+      invalidEmails,
+      batchCount: batches.length,
+    };
+  }),
+
+  // Get all email batches from all users (admin only)
+  listAllBatches: adminProcedure.query(async () => {
+    const batches = await getAllEmailBatches();
+    const users = await getAllUsers();
+    const userMap = new Map(users.map(u => [u.id, u]));
+    
+    return batches.map(batch => ({
+      ...batch,
+      userName: userMap.get(batch.userId)?.name || userMap.get(batch.userId)?.username || `User #${batch.userId}`,
+      userUsername: userMap.get(batch.userId)?.username || `user_${batch.userId}`,
+    }));
+  }),
+
+  // Delete any email batch (admin only)
+  adminDeleteBatch: adminProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      
+      await deleteEmailBatch(input.batchId);
+      
+      // Log action
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_delete_email_batch",
+        details: `Deleted email batch #${input.batchId} (${batch.name}) from user #${batch.userId}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+      
+      return { success: true };
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   admin: adminRouter,
   exportTemplates: exportTemplatesRouter,
+  email: emailRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     
@@ -436,7 +1306,7 @@ export const appRouter = router({
         password: z.string(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const result = await login(input.username, input.password);
+        const result = await login(input.username, input.password, ctx.req);
         
         if (!result) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password" });
@@ -462,7 +1332,7 @@ export const appRouter = router({
 
         // Set session cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: TWELVE_HOURS_MS });
 
         return { 
           success: true, 
@@ -511,13 +1381,118 @@ export const appRouter = router({
         });
 
         // Auto-login after setup
-        const result = await login(input.username, input.password);
+        const result = await login(input.username, input.password, ctx.req);
         if (result && 'token' in result) {
           const cookieOptions = getSessionCookieOptions(ctx.req);
-          ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+          ctx.res.cookie(COOKIE_NAME, result.token, { ...cookieOptions, maxAge: TWELVE_HOURS_MS });
         }
 
         return { userId, success: true };
+      }),
+
+    // Submit access request (public)
+    submitAccessRequest: publicProcedure
+      .input(z.object({
+        name: z.string().min(2).max(128),
+        telegram: z.string().max(128).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const requestId = await createAccessRequest({
+          name: input.name,
+          telegram: input.telegram,
+        });
+        
+        // Send Telegram notification to admin
+        await notifyNewAccessRequest(input.name, input.telegram || null);
+        
+        return { success: true, requestId };
+      }),
+
+    // Get all sessions for current user
+    getSessions: protectedProcedure.query(async ({ ctx }) => {
+      const sessions = await getSessionsByUserId(ctx.user.id);
+      
+      // Get current session token from cookie
+      const currentToken = ctx.req.cookies?.[COOKIE_NAME];
+      const currentSession = currentToken ? await getSessionByToken(currentToken) : null;
+      
+      return sessions.map(s => ({
+        id: s.id,
+        deviceInfo: s.deviceInfo,
+        browser: s.browser,
+        os: s.os,
+        ipAddress: s.ipAddress,
+        location: s.location,
+        lastActivity: s.lastActivity,
+        createdAt: s.createdAt,
+        isCurrent: currentSession?.id === s.id,
+        isExpired: new Date(s.expiresAt) < new Date(),
+      }));
+    }),
+
+    // Terminate a specific session
+    terminateSession: protectedProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const sessions = await getSessionsByUserId(ctx.user.id);
+        const session = sessions.find(s => s.id === input.sessionId);
+        
+        if (!session) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+        }
+        
+        await deleteSession(input.sessionId);
+        
+        await logAction({
+          userId: ctx.user.id,
+          action: "terminate_session",
+          details: `Terminated session ${input.sessionId}`,
+          ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+          userAgent: ctx.req.headers["user-agent"],
+        });
+        
+        return { success: true };
+      }),
+
+    // Terminate all sessions except current
+    terminateAllSessions: protectedProcedure.mutation(async ({ ctx }) => {
+      const currentToken = ctx.req.cookies?.[COOKIE_NAME];
+      const currentSession = currentToken ? await getSessionByToken(currentToken) : null;
+      
+      const count = await deleteAllUserSessions(ctx.user.id, currentSession?.id);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "terminate_all_sessions",
+        details: `Terminated ${count} sessions`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true, terminatedCount: count };
+    }),
+
+    // Get login history for current user
+    getLoginHistory: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(500).default(50),
+        actionFilter: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const authActions = ["login", "logout", "login_failed", "password_change", "terminate_session", "terminate_all_sessions"];
+        
+        const logs = await getActionLogs({
+          userId: ctx.user.id,
+          actions: input.actionFilter ? [input.actionFilter] : authActions,
+          limit: input.limit,
+        });
+        
+        const total = await countActionLogs({
+          userId: ctx.user.id,
+          actions: input.actionFilter ? [input.actionFilter] : authActions,
+        });
+        
+        return { logs, total };
       }),
   }),
 
@@ -543,6 +1518,12 @@ export const appRouter = router({
     checkSingle: protectedProcedure
       .input(z.object({ phoneNumber: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasPermission = await userHasPermission(ctx.user.id, 'hlr.single');
+        if (!hasPermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to perform HLR checks" });
+        }
+        
         const normalizedPhone = input.phoneNumber.trim();
         
         // Check cache first (24 hours)
@@ -672,7 +1653,7 @@ export const appRouter = router({
         return analysis;
       }),
 
-    // Start a new HLR batch check
+    // Start batch HLR check
     startBatch: protectedProcedure
       .input(z.object({
         name: z.string().optional(),
@@ -681,6 +1662,12 @@ export const appRouter = router({
         skipInvalid: z.boolean().default(true), // Skip invalid format numbers
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasPermission = await userHasPermission(ctx.user.id, 'hlr.batch');
+        if (!hasPermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to perform batch HLR checks" });
+        }
+        
         let { phoneNumbers } = input;
         
         // Analyze and normalize numbers
@@ -719,6 +1706,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
         }
         
+        // Check if server is shutting down
+        if (isShutdownInProgress()) {
+          throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: "Server is shutting down. Please try again later." });
+        }
+        
         // Create batch record
         const batchId = await createHlrBatch({
           userId: ctx.user.id,
@@ -729,6 +1721,9 @@ export const appRouter = router({
           invalidNumbers: 0,
           status: "processing",
         });
+        
+        // Register batch for graceful shutdown tracking
+        registerActiveBatch(batchId, numbersToCheck.length);
 
         // Process numbers - save each result IMMEDIATELY to prevent data loss
         let validCount = 0;
@@ -782,6 +1777,26 @@ export const appRouter = router({
 
         // Then check remaining numbers via API
         for (let i = 0; i < numbersToActuallyCheck.length; i++) {
+          // Check for graceful shutdown - stop processing but keep batch resumable
+          if (isShutdownInProgress()) {
+            console.log(`[Batch ${batchId}] Shutdown detected, stopping at ${processedCount}/${numbersToCheck.length}`);
+            await updateHlrBatch(batchId, {
+              processedNumbers: processedCount,
+              validNumbers: validCount,
+              invalidNumbers: invalidCount,
+              // Keep status as "processing" so it can be resumed
+            });
+            unregisterBatch(batchId);
+            return {
+              batchId,
+              totalProcessed: processedCount,
+              fromCache: cachedUsed,
+              apiCalls: i,
+              interrupted: true,
+              message: "Batch interrupted due to server shutdown. You can resume it later.",
+            };
+          }
+          
           const phone = numbersToActuallyCheck[i];
           if (!phone) continue;
 
@@ -846,6 +1861,8 @@ export const appRouter = router({
               validNumbers: validCount,
               invalidNumbers: invalidCount,
             });
+            // Update graceful shutdown tracker
+            updateBatchProgress(batchId, processedCount);
           }
         }
 
@@ -857,6 +1874,9 @@ export const appRouter = router({
           invalidNumbers: invalidCount,
           completedAt: new Date(),
         });
+        
+        // Unregister from graceful shutdown tracker
+        unregisterBatch(batchId);
         
         // Increment user checks and log action (only count API calls, not cached)
         await incrementUserChecks(ctx.user.id, numbersToActuallyCheck.length);
@@ -886,6 +1906,11 @@ export const appRouter = router({
 
     // Get all batches for current user
     listBatches: protectedProcedure.query(async ({ ctx }) => {
+      // Check permission
+      const hasPermission = await userHasPermission(ctx.user.id, 'hlr.history');
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to view check history" });
+      }
       return await getHlrBatchesByUserId(ctx.user.id);
     }),
 
@@ -927,6 +1952,12 @@ export const appRouter = router({
         fields: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasExportPermission = await userHasPermission(ctx.user.id, 'hlr.export');
+        if (!hasExportPermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to export results" });
+        }
+        
         const batch = await getHlrBatchById(input.batchId);
         if (!batch || batch.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
@@ -1213,11 +2244,18 @@ export const appRouter = router({
     deleteBatch: protectedProcedure
       .input(z.object({ batchId: z.number() }))
       .mutation(async ({ ctx, input }) => {
+        // Check permission
+        const hasDeletePermission = await userHasPermission(ctx.user.id, 'hlr.delete');
+        if (!hasDeletePermission) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "You don't have permission to delete batches" });
+        }
+        
         const batch = await getHlrBatchById(input.batchId);
         if (!batch || batch.userId !== ctx.user.id) {
-          throw new Error("Batch not found or access denied");
+          throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found or access denied" });
         }
         await deleteHlrBatch(input.batchId);
+        await logAction({ userId: ctx.user.id, action: "delete_batch", details: `Deleted batch ${input.batchId}` });
         return { success: true };
       }),
 
@@ -1231,10 +2269,13 @@ export const appRouter = router({
         validNumbers: stats.validChecks,
         invalidNumbers: stats.invalidChecks,
         checksToday: stats.todayChecks,
+        checksThisWeek: userLimits?.checksThisWeek || 0,
         checksThisMonth: stats.monthChecks,
         limits: {
-          dailyLimit: userLimits?.dailyLimit || 0,
-          monthlyLimit: userLimits?.monthlyLimit || 0,
+          dailyLimit: userLimits?.dailyLimit || null,
+          weeklyLimit: userLimits?.weeklyLimit || null,
+          monthlyLimit: userLimits?.monthlyLimit || null,
+          batchLimit: userLimits?.batchLimit || null,
         }
       };
     }),
@@ -1242,7 +2283,7 @@ export const appRouter = router({
     // Check API balance (admin only)
     getBalance: protectedProcedure.query(async ({ ctx }) => {
       // Only admins can see the balance
-      if (ctx.user.role !== "admin") {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "manager") {
         return { balance: null, currency: "EUR", restricted: true };
       }
       const apiKey = process.env.SEVEN_IO_API_KEY;

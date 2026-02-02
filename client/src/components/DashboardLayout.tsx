@@ -33,7 +33,15 @@ import {
   Bell,
   Users,
   CreditCard,
-  Globe
+  Globe,
+  Shield,
+  History,
+  ClipboardList,
+  Key,
+  UserPlus,
+  Send,
+  Mail,
+  AtSign
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -44,16 +52,24 @@ import { Button } from "./ui/button";
 
 const SUPPORT_TELEGRAM = "https://t.me/toskaqwe1";
 
-const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean) => {
+const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean, language: string) => {
   const items: Array<{icon: any, label: string, path: string, external?: boolean}> = [
     { icon: LayoutDashboard, label: t.nav.dashboard, path: "/dashboard" },
     { icon: Search, label: t.nav.hlrLookup, path: "/lookup" },
     { icon: Layers, label: t.nav.batchChecker, path: "/" },
+    { icon: AtSign, label: t.nav?.emailLookup || (language === "ru" ? "Email Проверка" : language === "uk" ? "Email Перевірка" : "Email Lookup"), path: "/email-lookup" },
+    { icon: Mail, label: t.nav?.emailBatch || (language === "ru" ? "Email Массовая" : language === "uk" ? "Email Масова" : "Email Batch"), path: "/email" },
   ];
   
   if (isAdmin) {
     items.push(
       { icon: Users, label: t.nav.users, path: "/admin" },
+      { icon: UserPlus, label: t.accessRequest?.requests || (language === "ru" ? "Заявки" : language === "uk" ? "Заявки" : "Requests"), path: "/admin/requests" },
+      { icon: Key, label: t.permissions?.title || (language === "ru" ? "Права" : language === "uk" ? "Права" : "Permissions"), path: "/admin/permissions" },
+      { icon: History, label: language === "ru" ? "HLR История" : language === "uk" ? "HLR Історія" : "HLR History", path: "/admin/history" },
+      { icon: Mail, label: language === "ru" ? "Email История" : language === "uk" ? "Email Історія" : "Email History", path: "/admin/email-history" },
+      { icon: ClipboardList, label: language === "ru" ? "Аудит" : language === "uk" ? "Аудит" : "Audit", path: "/admin/audit" },
+      { icon: Send, label: t.telegram?.title || (language === "ru" ? "Telegram" : language === "uk" ? "Telegram" : "Telegram"), path: "/admin/telegram" },
     );
   }
   
@@ -103,7 +119,7 @@ function DashboardLayoutContent({
   const [location, setLocation] = useLocation();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const menuItems = getMenuItems(t, user?.role === "admin");
+  const menuItems = getMenuItems(t, user?.role === "admin", language);
   const isMobile = useIsMobile();
 
   return (
@@ -115,7 +131,7 @@ function DashboardLayoutContent({
               <Layers className="h-5 w-5 text-primary" />
             </div>
             {!isCollapsed && (
-              <span className="font-bold text-lg tracking-tight">HLR Pro</span>
+              <span className="font-bold text-lg tracking-tight">DataCheck Pro</span>
             )}
           </div>
         </SidebarHeader>
@@ -197,6 +213,31 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {user?.role === "admin" && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => setLocation("/sessions")}
+                      className="cursor-pointer"
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>{language === "ru" ? "Сессии" : language === "uk" ? "Сесії" : "Sessions"}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setLocation("/login-history")}
+                      className="cursor-pointer"
+                    >
+                      <History className="mr-2 h-4 w-4" />
+                      <span>{language === "ru" ? "История входов" : language === "uk" ? "Історія входів" : "Login History"}</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem
+                  onClick={() => setLocation("/settings")}
+                  className="cursor-pointer"
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>{t.nav.settings}</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
@@ -253,7 +294,7 @@ function DashboardLayoutContent({
         <header className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/95 backdrop-blur sticky top-0 z-40">
           <div className="flex items-center gap-4">
             {isMobile && <SidebarTrigger className="h-9 w-9" />}
-            <h1 className="text-lg font-semibold">HLR Bulk Checker</h1>
+            <h1 className="text-lg font-semibold">DataCheck Pro</h1>
           </div>
           
           <div className="flex items-center gap-2">

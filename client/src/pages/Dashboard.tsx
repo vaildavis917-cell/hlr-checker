@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2 } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2, Mail, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
@@ -44,14 +44,26 @@ export default function Dashboard() {
   
   const { data: stats } = trpc.hlr.getUserStats.useQuery();
   const { data: balance } = trpc.hlr.getBalance.useQuery();
+  const { data: emailBalance } = trpc.email.getBalance.useQuery();
+  const { data: emailStats } = trpc.email.getStats.useQuery();
 
-  const dailyLimit = stats?.limits?.dailyLimit || 0;
-  const monthlyLimit = stats?.limits?.monthlyLimit || 0;
+  const dailyLimit = stats?.limits?.dailyLimit ?? 0;
+  const weeklyLimit = stats?.limits?.weeklyLimit ?? 0;
+  const monthlyLimit = stats?.limits?.monthlyLimit ?? 0;
+  const batchLimit = stats?.limits?.batchLimit ?? 0;
   const checksToday = stats?.checksToday || 0;
+  const checksThisWeek = stats?.checksThisWeek || 0;
   const checksThisMonth = stats?.checksThisMonth || 0;
   
   const dailyProgress = dailyLimit > 0 ? (checksToday / dailyLimit) * 100 : 0;
+  const weeklyProgress = weeklyLimit > 0 ? (checksThisWeek / weeklyLimit) * 100 : 0;
   const monthlyProgress = monthlyLimit > 0 ? (checksThisMonth / monthlyLimit) * 100 : 0;
+  
+  // Check if any limit is close to being reached (>80%)
+  const isDailyWarning = dailyLimit > 0 && dailyProgress >= 80 && dailyProgress < 100;
+  const isWeeklyWarning = weeklyLimit > 0 && weeklyProgress >= 80 && weeklyProgress < 100;
+  const isMonthlyWarning = monthlyLimit > 0 && monthlyProgress >= 80 && monthlyProgress < 100;
+  const hasWarning = isDailyWarning || isWeeklyWarning || isMonthlyWarning;
   
   // Estimate available checks based on balance (assuming ~$0.01 per check)
   const estimatedChecks = balance?.balance ? Math.floor(balance.balance / 0.01) : 0;
@@ -64,64 +76,39 @@ export default function Dashboard() {
           <p className="text-muted-foreground">{t.home.subtitle}</p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* API Balances */}
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.statistics?.totalChecked || "Total Checked"}</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalChecks || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {t.home.monthlyUsage}: {checksThisMonth}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.statistics?.validNumbers || "Valid"}</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-500">{stats?.validNumbers || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats?.totalChecks ? ((stats.validNumbers / stats.totalChecks) * 100).toFixed(1) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.statistics?.invalidNumbers || "Invalid"}</CardTitle>
-              <XCircle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-500">{stats?.invalidNumbers || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats?.totalChecks ? ((stats.invalidNumbers / stats.totalChecks) * 100).toFixed(1) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.home.apiBalance}</CardTitle>
+              <CardTitle className="text-sm font-medium">{t.home.apiBalance} (HLR)</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${balance?.balance?.toFixed(2) || "0.00"}</div>
+              <div className="text-2xl font-bold">{balance?.balance?.toFixed(2) || "0.00"} EUR</div>
               <p className="text-xs text-muted-foreground">
                 ~{estimatedChecks.toLocaleString()} {t.home.estimatedChecks || "checks available"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">{t.home.apiBalance} (Email)</CardTitle>
+              <Mail className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{emailBalance?.credits?.toLocaleString() || "0"}</div>
+              <p className="text-xs text-muted-foreground">
+                {t.email?.credits || "credits available"}
               </p>
             </CardContent>
           </Card>
         </div>
 
         {/* Usage Limits */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Daily Limit */}
+          <Card className={dailyProgress >= 100 ? "border-destructive" : isDailyWarning ? "border-yellow-500" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
@@ -137,9 +124,15 @@ export default function Dashboard() {
             <CardContent>
               {dailyLimit > 0 ? (
                 <>
-                  <Progress value={dailyProgress} className="h-3" />
+                  <Progress 
+                    value={dailyProgress} 
+                    className={`h-3 ${dailyProgress >= 100 ? '[&>div]:bg-destructive' : isDailyWarning ? '[&>div]:bg-yellow-500' : ''}`} 
+                  />
                   {dailyProgress >= 100 && (
                     <p className="text-sm text-destructive mt-2">{t.home.dailyLimitReached}</p>
+                  )}
+                  {isDailyWarning && (
+                    <p className="text-sm text-yellow-500 mt-2">{t.home.limitWarning || "Приближается к лимиту"}</p>
                   )}
                 </>
               ) : (
@@ -148,7 +141,35 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          {/* Weekly Limit */}
+          {weeklyLimit > 0 && (
+            <Card className={weeklyProgress >= 100 ? "border-destructive" : isWeeklyWarning ? "border-yellow-500" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  {t.home.weeklyUsage}
+                </CardTitle>
+                <CardDescription>
+                  {checksThisWeek} / {weeklyLimit} {t.statistics?.checksUsed || "checks used"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Progress 
+                  value={weeklyProgress} 
+                  className={`h-3 ${weeklyProgress >= 100 ? '[&>div]:bg-destructive' : isWeeklyWarning ? '[&>div]:bg-yellow-500' : ''}`} 
+                />
+                {weeklyProgress >= 100 && (
+                  <p className="text-sm text-destructive mt-2">{t.home.weeklyLimitReached}</p>
+                )}
+                {isWeeklyWarning && (
+                  <p className="text-sm text-yellow-500 mt-2">{t.home.limitWarning || "Приближается к лимиту"}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Monthly Limit */}
+          <Card className={monthlyProgress >= 100 ? "border-destructive" : isMonthlyWarning ? "border-yellow-500" : ""}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
@@ -164,9 +185,15 @@ export default function Dashboard() {
             <CardContent>
               {monthlyLimit > 0 ? (
                 <>
-                  <Progress value={monthlyProgress} className="h-3" />
+                  <Progress 
+                    value={monthlyProgress} 
+                    className={`h-3 ${monthlyProgress >= 100 ? '[&>div]:bg-destructive' : isMonthlyWarning ? '[&>div]:bg-yellow-500' : ''}`} 
+                  />
                   {monthlyProgress >= 100 && (
                     <p className="text-sm text-destructive mt-2">{t.home.monthlyLimitReached}</p>
+                  )}
+                  {isMonthlyWarning && (
+                    <p className="text-sm text-yellow-500 mt-2">{t.home.limitWarning || "Приближается к лимиту"}</p>
                   )}
                 </>
               ) : (
@@ -174,6 +201,24 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+
+          {/* Batch Limit Info */}
+          {batchLimit > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  {t.home.batchLimit}
+                </CardTitle>
+                <CardDescription>
+                  {t.admin?.batchLimit || "Максимум номеров в одной партии"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{batchLimit}</div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Recent Activity - Admin sees all users, regular users see only their own */}

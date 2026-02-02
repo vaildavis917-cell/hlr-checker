@@ -24,7 +24,7 @@ export default function Statistics() {
 
   // SEO
   useEffect(() => {
-    document.title = `${t.stats.title} - HLR Checker`;
+    document.title = `${t.stats.title} - DataCheck Pro`;
   }, [t]);
 
   const stats = isAdmin ? statsQuery.data : userStatsQuery.data;
