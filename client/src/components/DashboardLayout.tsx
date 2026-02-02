@@ -55,10 +55,8 @@ const SUPPORT_TELEGRAM = "https://t.me/toskaqwe1";
 const getMenuItems = (t: ReturnType<typeof useLanguage>["t"], isAdmin: boolean, language: string) => {
   const items: Array<{icon: any, label: string, path: string, external?: boolean}> = [
     { icon: LayoutDashboard, label: t.nav.dashboard, path: "/dashboard" },
-    { icon: Search, label: t.nav.hlrLookup, path: "/lookup" },
-    { icon: Layers, label: t.nav.batchChecker, path: "/" },
-    { icon: AtSign, label: t.nav?.emailLookup || (language === "ru" ? "Email Проверка" : language === "uk" ? "Email Перевірка" : "Email Lookup"), path: "/email-lookup" },
-    { icon: Mail, label: t.nav?.emailBatch || (language === "ru" ? "Email Массовая" : language === "uk" ? "Email Масова" : "Email Batch"), path: "/email" },
+    { icon: Layers, label: language === "ru" ? "HLR Проверка" : language === "uk" ? "HLR Перевірка" : "HLR Check", path: "/" },
+    { icon: Mail, label: language === "ru" ? "Email Проверка" : language === "uk" ? "Email Перевірка" : "Email Check", path: "/email" },
     { icon: History, label: language === "ru" ? "HLR История" : language === "uk" ? "HLR Історія" : "HLR History", path: "/history" },
     { icon: Mail, label: language === "ru" ? "Email История" : language === "uk" ? "Email Історія" : "Email History", path: "/email-history" },
   ];
