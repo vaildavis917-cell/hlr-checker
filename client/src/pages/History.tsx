@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -10,6 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +30,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useState, useMemo } from "react";
 import { 
   History as HistoryIcon, 
   Trash2, 
@@ -29,17 +39,102 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  Search,
+  ArrowUpDown,
+  User as UserIcon
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+type SortField = "createdAt" | "userName" | "totalNumbers" | "validNumbers";
+type SortDirection = "asc" | "desc";
+
 export default function History() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const batchesQuery = trpc.hlr.listBatches.useQuery();
+  const isAdmin = user?.role === "admin";
+  
+  // State for admin filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [userFilter, setUserFilter] = useState<string>("all");
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  
+  // Use different queries based on role
+  const userBatchesQuery = trpc.hlr.listBatches.useQuery(undefined, { enabled: !isAdmin });
+  const adminBatchesQuery = trpc.admin.listAllBatches.useQuery(undefined, { enabled: isAdmin });
+  
+  const batchesQuery = isAdmin ? adminBatchesQuery : userBatchesQuery;
   const deleteBatchMutation = trpc.hlr.deleteBatch.useMutation();
+
+  // Get unique users for filter (admin only)
+  const uniqueUsers = useMemo(() => {
+    if (!isAdmin || !adminBatchesQuery.data) return [];
+    const users = new Map<number, string>();
+    adminBatchesQuery.data.forEach((batch: any) => {
+      if (batch.userId && batch.userName) {
+        users.set(batch.userId, batch.userName);
+      }
+    });
+    return Array.from(users.entries()).map(([id, name]) => ({ id, name }));
+  }, [isAdmin, adminBatchesQuery.data]);
+
+  // Filter and sort batches
+  const filteredBatches = useMemo(() => {
+    if (!batchesQuery.data) return [];
+    
+    let filtered = [...batchesQuery.data];
+    
+    if (isAdmin) {
+      // Apply search filter
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter((batch: any) => 
+          batch.name?.toLowerCase().includes(term) ||
+          batch.userName?.toLowerCase().includes(term)
+        );
+      }
+      
+      // Apply user filter
+      if (userFilter !== "all") {
+        filtered = filtered.filter((batch: any) => batch.userId === parseInt(userFilter));
+      }
+      
+      // Apply sorting
+      filtered.sort((a: any, b: any) => {
+        let aVal: any, bVal: any;
+        switch (sortField) {
+          case "createdAt":
+            aVal = new Date(a.createdAt).getTime();
+            bVal = new Date(b.createdAt).getTime();
+            break;
+          case "userName":
+            aVal = a.userName || "";
+            bVal = b.userName || "";
+            break;
+          case "totalNumbers":
+            aVal = a.totalNumbers;
+            bVal = b.totalNumbers;
+            break;
+          case "validNumbers":
+            aVal = a.validNumbers;
+            bVal = b.validNumbers;
+            break;
+          default:
+            return 0;
+        }
+        if (sortDirection === "asc") {
+          return aVal > bVal ? 1 : -1;
+        }
+        return aVal < bVal ? 1 : -1;
+      });
+    }
+    
+    return filtered;
+  }, [batchesQuery.data, isAdmin, searchTerm, userFilter, sortField, sortDirection]);
 
   const handleDelete = async (batchId: number) => {
     try {
@@ -48,6 +143,15 @@ export default function History() {
       toast.success(t.history.batchDeleted);
     } catch (error) {
       toast.error(t.history.batchDeleted);
+    }
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
     }
   };
 
@@ -77,6 +181,38 @@ export default function History() {
     }
   };
 
+  const getContent = () => {
+    if (language === "ru") {
+      return {
+        title: isAdmin ? "HLR История (Все пользователи)" : "HLR История",
+        subtitle: isAdmin ? "Просмотр истории HLR проверок всех пользователей" : "Просмотр всех предыдущих HLR проверок",
+        searchPlaceholder: "Поиск по названию или пользователю...",
+        allUsers: "Все пользователи",
+        user: "Пользователь",
+        noResults: "Проверок не найдено",
+      };
+    } else if (language === "uk") {
+      return {
+        title: isAdmin ? "HLR Історія (Всі користувачі)" : "HLR Історія",
+        subtitle: isAdmin ? "Перегляд історії HLR перевірок всіх користувачів" : "Перегляд всіх попередніх HLR перевірок",
+        searchPlaceholder: "Пошук за назвою або користувачем...",
+        allUsers: "Всі користувачі",
+        user: "Користувач",
+        noResults: "Перевірок не знайдено",
+      };
+    }
+    return {
+      title: isAdmin ? "HLR History (All Users)" : "HLR History",
+      subtitle: isAdmin ? "View HLR check history from all users" : "View all previous HLR checks",
+      searchPlaceholder: "Search by name or user...",
+      allUsers: "All users",
+      user: "User",
+      noResults: "No checks found",
+    };
+  };
+
+  const content = getContent();
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -84,19 +220,51 @@ export default function History() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <HistoryIcon className="h-8 w-8" />
-            {t.history.title}
+            {content.title}
           </h1>
           <p className="text-muted-foreground">
-            {t.history.subtitle}
+            {content.subtitle}
           </p>
         </div>
+
+        {/* Admin Filters */}
+        {isAdmin && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={content.searchPlaceholder}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Select value={userFilter} onValueChange={setUserFilter}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder={content.allUsers} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{content.allUsers}</SelectItem>
+                    {uniqueUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id.toString()}>
+                        {u.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* History Table */}
         <Card>
           <CardHeader>
             <CardTitle>{t.history.title}</CardTitle>
             <CardDescription>
-              {batchesQuery.data?.length || 0} {t.history.total}
+              {filteredBatches.length} {t.history.total}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -104,10 +272,10 @@ export default function History() {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : batchesQuery.data?.length === 0 ? (
+            ) : filteredBatches.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <HistoryIcon className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                <p className="text-lg font-medium">{t.history.noBatches}</p>
+                <p className="text-lg font-medium">{content.noResults}</p>
                 <p className="text-sm mt-1">{t.home.startByEntering}</p>
                 <Button 
                   variant="outline" 
@@ -123,17 +291,60 @@ export default function History() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>{t.history.batchName}</TableHead>
+                      {isAdmin && (
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 -ml-2"
+                            onClick={() => handleSort("userName")}
+                          >
+                            {content.user}
+                            <ArrowUpDown className="ml-1 h-3 w-3" />
+                          </Button>
+                        </TableHead>
+                      )}
                       <TableHead>{t.status}</TableHead>
-                      <TableHead className="text-center">{t.history.total}</TableHead>
-                      <TableHead className="text-center">{t.home.statusValid}</TableHead>
+                      <TableHead className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => handleSort("totalNumbers")}
+                        >
+                          {t.history.total}
+                          <ArrowUpDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={() => handleSort("validNumbers")}
+                        >
+                          {t.home.statusValid}
+                          <ArrowUpDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </TableHead>
                       <TableHead className="text-center">{t.home.statusInvalid}</TableHead>
-                      <TableHead>{t.date}</TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 -ml-2"
+                          onClick={() => handleSort("createdAt")}
+                        >
+                          {t.date}
+                          <ArrowUpDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </TableHead>
                       <TableHead>{t.history.completed}</TableHead>
                       <TableHead className="text-right">{t.actions}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {batchesQuery.data?.map((batch) => (
+                    {filteredBatches.map((batch: any) => (
                       <TableRow key={batch.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -143,6 +354,14 @@ export default function History() {
                             </span>
                           </div>
                         </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <UserIcon className="h-4 w-4 text-muted-foreground" />
+                              <span>{batch.userName || "—"}</span>
+                            </div>
+                          </TableCell>
+                        )}
                         <TableCell>{getStatusBadge(batch.status)}</TableCell>
                         <TableCell className="text-center font-mono">
                           {batch.totalNumbers}
