@@ -400,3 +400,17 @@
 ## UI Fixes
 - [x] Убрать карточку "Невалидных" с Dashboard
 - [x] Исправить вкладки на странице Email Validator
+- [x] Добавить раздел "Email проверки" в редактирование прав
+- [x] Убрать баланс API со страницы HLR Bulk Checker
+
+## Help Center Update
+- [x] Полностью переписать Help Center для новичков
+- [x] Добавить раздел Email Validator в Help Center
+
+
+## GitHub Export (2026-02-02)
+- [x] Обновить README.md с актуальной информацией
+- [x] Обновить CHANGELOG.md (добавить v2.0.0)
+- [x] Заменить HLR Bulk Checker на DataCheck Pro везде
+- [x] Создать .env.example без конфиденциальных данных
+- [x] Загрузить на GitHub (приватный репозиторий)

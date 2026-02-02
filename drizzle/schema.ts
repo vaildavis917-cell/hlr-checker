@@ -12,6 +12,11 @@ export const PERMISSIONS = [
   'hlr.export',       // Export results
   'hlr.history',      // View check history
   'hlr.delete',       // Delete batches
+  'email.single',     // Single email check
+  'email.batch',      // Batch email check
+  'email.export',     // Export email results
+  'email.history',    // View email check history
+  'email.delete',     // Delete email batches
   'tools.duplicates', // Use duplicate removal tool
   'admin.users',      // Manage users
   'admin.users.create', // Create new users
@@ -34,6 +39,11 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, { en: string; ru: strin
   'hlr.export': { en: 'Export Results', ru: 'Экспорт результатов', uk: 'Експорт результатів' },
   'hlr.history': { en: 'View Check History', ru: 'Просмотр истории', uk: 'Перегляд історії' },
   'hlr.delete': { en: 'Delete Batches', ru: 'Удаление партий', uk: 'Видалення партій' },
+  'email.single': { en: 'Single Email Check', ru: 'Одиночная Email проверка', uk: 'Одинична Email перевірка' },
+  'email.batch': { en: 'Batch Email Check', ru: 'Пакетная Email проверка', uk: 'Пакетна Email перевірка' },
+  'email.export': { en: 'Export Email Results', ru: 'Экспорт результатов Email', uk: 'Експорт результатів Email' },
+  'email.history': { en: 'View Email History', ru: 'Просмотр истории Email', uk: 'Перегляд історії Email' },
+  'email.delete': { en: 'Delete Email Batches', ru: 'Удаление Email партий', uk: 'Видалення Email партій' },
   'tools.duplicates': { en: 'Duplicate Removal Tool', ru: 'Инструмент удаления дубликатов', uk: 'Інструмент видалення дублікатів' },
   'admin.users': { en: 'View Users', ru: 'Просмотр пользователей', uk: 'Перегляд користувачів' },
   'admin.users.create': { en: 'Create Users', ru: 'Создание пользователей', uk: 'Створення користувачів' },
@@ -49,9 +59,9 @@ export const PERMISSION_DESCRIPTIONS: Record<Permission, { en: string; ru: strin
 
 // Default permissions by role
 export const DEFAULT_PERMISSIONS: Record<string, Permission[]> = {
-  viewer: ['hlr.history'],
-  user: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'tools.duplicates'],
-  manager: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'hlr.delete', 'tools.duplicates', 'admin.users', 'admin.audit', 'admin.sessions'],
+  viewer: ['hlr.history', 'email.history'],
+  user: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'email.single', 'email.batch', 'email.export', 'email.history', 'tools.duplicates'],
+  manager: ['hlr.single', 'hlr.batch', 'hlr.export', 'hlr.history', 'hlr.delete', 'email.single', 'email.batch', 'email.export', 'email.history', 'email.delete', 'tools.duplicates', 'admin.users', 'admin.audit', 'admin.sessions'],
   admin: [...PERMISSIONS],
 };
 

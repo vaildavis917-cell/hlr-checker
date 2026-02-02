@@ -76,34 +76,8 @@ export default function Dashboard() {
           <p className="text-muted-foreground">{t.home.subtitle}</p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.statistics?.totalChecked || "Total Checked"}</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalChecks || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {t.home.monthlyUsage}: {checksThisMonth}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.statistics?.validNumbers || "Valid"}</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-500">{stats?.validNumbers || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats?.totalChecks ? ((stats.validNumbers / stats.totalChecks) * 100).toFixed(1) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-
+        {/* API Balances */}
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">{t.home.apiBalance} (HLR)</CardTitle>

@@ -269,7 +269,7 @@ export default function Login() {
             <h1 className="text-2xl font-semibold tracking-tight">
                 {isSetupMode ? "Первоначальная настройка" : t.auth.welcomeBack}
               </h1>
-            <h2 className="sr-only">HLR Bulk Checker - Phone Number Validation</h2>
+            <h2 className="sr-only">DataCheck Pro - Phone & Email Validation</h2>
             <CardDescription>
               {isSetupMode 
                 ? "Создайте аккаунт администратора для начала работы"

@@ -93,14 +93,27 @@ export function hasAllPermissions(
  */
 export function getPermissionDescriptions(): Array<{ id: Permission; name: string; description: string; category: string }> {
   return [
-    { id: 'hlr.single', name: 'Single Check', description: 'Perform single HLR checks', category: 'HLR' },
-    { id: 'hlr.batch', name: 'Batch Check', description: 'Perform batch HLR checks', category: 'HLR' },
-    { id: 'hlr.export', name: 'Export Results', description: 'Export check results to CSV/Excel', category: 'HLR' },
-    { id: 'hlr.history', name: 'View History', description: 'View check history', category: 'HLR' },
-    { id: 'tools.duplicates', name: 'Duplicate Tool', description: 'Use duplicate removal tool', category: 'Tools' },
-    { id: 'admin.users', name: 'Manage Users', description: 'Create, edit, delete users', category: 'Admin' },
-    { id: 'admin.audit', name: 'View Audit', description: 'View audit logs', category: 'Admin' },
-    { id: 'admin.settings', name: 'Settings', description: 'Change system settings', category: 'Admin' },
+    { id: 'hlr.single', name: 'Single Check', description: 'Perform single HLR checks', category: 'HLR проверки' },
+    { id: 'hlr.batch', name: 'Batch Check', description: 'Perform batch HLR checks', category: 'HLR проверки' },
+    { id: 'hlr.export', name: 'Export Results', description: 'Export check results to CSV/Excel', category: 'HLR проверки' },
+    { id: 'hlr.history', name: 'View History', description: 'View check history', category: 'HLR проверки' },
+    { id: 'hlr.delete', name: 'Delete Batches', description: 'Delete HLR check batches', category: 'HLR проверки' },
+    { id: 'email.single', name: 'Single Email Check', description: 'Perform single email verification', category: 'Email проверки' },
+    { id: 'email.batch', name: 'Batch Email Check', description: 'Perform batch email verification', category: 'Email проверки' },
+    { id: 'email.export', name: 'Export Email Results', description: 'Export email results to CSV/Excel', category: 'Email проверки' },
+    { id: 'email.history', name: 'View Email History', description: 'View email check history', category: 'Email проверки' },
+    { id: 'email.delete', name: 'Delete Email Batches', description: 'Delete email check batches', category: 'Email проверки' },
+    { id: 'tools.duplicates', name: 'Duplicate Tool', description: 'Use duplicate removal tool', category: 'Инструменты' },
+    { id: 'admin.users', name: 'View Users', description: 'View users list', category: 'Администрирование' },
+    { id: 'admin.users.create', name: 'Create Users', description: 'Create new users', category: 'Администрирование' },
+    { id: 'admin.users.edit', name: 'Edit Users', description: 'Edit user settings', category: 'Администрирование' },
+    { id: 'admin.users.delete', name: 'Delete Users', description: 'Delete users', category: 'Администрирование' },
+    { id: 'admin.users.limits', name: 'Set Limits', description: 'Set user limits', category: 'Администрирование' },
+    { id: 'admin.audit', name: 'View Audit', description: 'View audit logs', category: 'Администрирование' },
+    { id: 'admin.sessions', name: 'Manage Sessions', description: 'View and manage user sessions', category: 'Администрирование' },
+    { id: 'admin.balance', name: 'View Balance', description: 'View API balance', category: 'Администрирование' },
+    { id: 'admin.settings', name: 'Settings', description: 'Change system settings', category: 'Администрирование' },
+    { id: 'admin.permissions', name: 'Manage Permissions', description: 'Manage role permissions', category: 'Администрирование' },
   ];
 }
 

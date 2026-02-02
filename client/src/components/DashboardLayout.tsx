@@ -292,7 +292,7 @@ function DashboardLayoutContent({
         <header className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/95 backdrop-blur sticky top-0 z-40">
           <div className="flex items-center gap-4">
             {isMobile && <SidebarTrigger className="h-9 w-9" />}
-            <h1 className="text-lg font-semibold">HLR Bulk Checker</h1>
+            <h1 className="text-lg font-semibold">DataCheck Pro</h1>
           </div>
           
           <div className="flex items-center gap-2">

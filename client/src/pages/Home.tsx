@@ -88,7 +88,6 @@ export default function Home() {
   const singleCheckMutation = trpc.hlr.checkSingle.useMutation();
   
   // API queries
-  const balanceQuery = trpc.hlr.getBalance.useQuery(undefined, { enabled: isAdmin });
   const userStatsQuery = trpc.hlr.getUserStats.useQuery();
   
   // Check if any batch is currently processing
@@ -478,24 +477,6 @@ export default function Home() {
         )}
 
         {/* Balance Card - Admin Only */}
-        {isAdmin && (
-          <div className="flex items-center gap-4 p-4 rounded-lg border bg-card">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Wallet className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t.home.apiBalance}</p>
-              <p className="text-xl font-semibold">
-                {balanceQuery.isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  `${balanceQuery.data?.balance?.toFixed(2) || "0.00"} ${balanceQuery.data?.currency || "EUR"}`
-                )}
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* User Limits Card with Progress Bars */}
         {userStatsQuery.data && (
           <Card>
@@ -598,15 +579,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Estimated checks for unlimited users */}
-              {(userStatsQuery.data.limits.dailyLimit ?? 0) === 0 && isAdmin && balanceQuery.data?.balance && (
-                <div className="pt-2 border-t">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{t.home.estimatedChecks || "Примерно доступно проверок"}</span>
-                    <span className="font-medium text-green-500">~{Math.floor(balanceQuery.data.balance / 0.01)}</span>
-                  </div>
-                </div>
-              )}
+
             </CardContent>
           </Card>
         )}

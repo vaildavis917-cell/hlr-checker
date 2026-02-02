@@ -38,6 +38,7 @@ import {
   Settings,
   FileText,
   Key,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -46,6 +47,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 // Permission category icons
 const categoryIcons: Record<string, React.ReactNode> = {
   hlr: <FileText className="h-4 w-4" />,
+  email: <Mail className="h-4 w-4" />,
   tools: <Settings className="h-4 w-4" />,
   admin: <Shield className="h-4 w-4" />,
 };
@@ -165,6 +167,7 @@ export default function Permissions() {
   const getCategoryName = (category: string) => {
     const names: Record<string, Record<string, string>> = {
       hlr: { ru: "HLR проверки", uk: "HLR перевірки", en: "HLR Checks" },
+      email: { ru: "Email проверки", uk: "Email перевірки", en: "Email Checks" },
       tools: { ru: "Инструменты", uk: "Інструменти", en: "Tools" },
       admin: { ru: "Администрирование", uk: "Адміністрування", en: "Administration" },
     };
