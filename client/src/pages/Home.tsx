@@ -45,16 +45,30 @@ import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
 import FileDropZone from "@/components/FileDropZone";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSearch } from "wouter";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
 
 export default function Home() {
   const { t } = useLanguage();
+  const searchString = useSearch();
   const [phoneInput, setPhoneInput] = useState("");
   const [batchName, setBatchName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+
+  // Handle batch parameter from URL (from History page)
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const batchParam = params.get('batch');
+    if (batchParam) {
+      const batchId = parseInt(batchParam, 10);
+      if (!isNaN(batchId) && batchId > 0) {
+        setCurrentBatchId(batchId);
+      }
+    }
+  }, [searchString]);
 
   // SEO: Set page title and meta description
   useEffect(() => {
