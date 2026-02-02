@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Mail, Search, FileSpreadsheet, Trash2, Download, CheckCircle, XCircle, AlertTriangle, HelpCircle, Loader2, CreditCard, Upload } from "lucide-react";
+import { Mail, Search, FileSpreadsheet, Trash2, Download, CheckCircle, XCircle, AlertTriangle, HelpCircle, Loader2, Upload } from "lucide-react";
 import FileDropZone from "@/components/FileDropZone";
 import * as XLSX from "xlsx";
 
@@ -27,11 +27,6 @@ export default function EmailValidator() {
   const [batchEmails, setBatchEmails] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  // Balance query
-  const balanceQuery = trpc.email.getBalance.useQuery(undefined, {
-    refetchInterval: 60000,
-  });
 
   // Batches list
   const batchesQuery = trpc.email.listBatches.useQuery();
@@ -184,41 +179,26 @@ export default function EmailValidator() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Mail className="h-6 w-6 text-blue-500" />
-              {t.email?.title || "Email Validator"}
-            </h1>
-            <p className="text-muted-foreground">
-              {t.email?.description || "Verify email addresses for deliverability"}
-            </p>
-          </div>
-          <div className="flex items-center gap-4">
-            <Card className="bg-card/50">
-              <CardContent className="p-3 flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium">
-                  {balanceQuery.data?.credits?.toLocaleString() || 0} {t.email?.credits || "credits"}
-                </span>
-              </CardContent>
-            </Card>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Mail className="h-6 w-6 text-blue-500" />
+            {t.email?.title || "Email Validator"}
+          </h1>
+          <p className="text-muted-foreground">
+            {t.email?.description || "Verify email addresses for deliverability"}
+          </p>
         </div>
 
         {/* Main Tabs */}
         <Tabs defaultValue="single" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="single" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="single">
               {t.email?.singleCheck || "Single Check"}
             </TabsTrigger>
-            <TabsTrigger value="batch" className="flex items-center gap-2">
-              <FileSpreadsheet className="h-4 w-4" />
+            <TabsTrigger value="batch">
               {t.email?.batchCheck || "Batch Check"}
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <Mail className="h-4 w-4" />
+            <TabsTrigger value="history">
               {t.email?.history || "History"}
             </TabsTrigger>
           </TabsList>

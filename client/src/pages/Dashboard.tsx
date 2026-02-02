@@ -106,19 +106,6 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{t.statistics?.invalidNumbers || "Invalid"}</CardTitle>
-              <XCircle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-500">{stats?.invalidNumbers || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats?.totalChecks ? ((stats.invalidNumbers / stats.totalChecks) * 100).toFixed(1) : 0}%
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">{t.home.apiBalance} (HLR)</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
