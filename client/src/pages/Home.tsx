@@ -751,75 +751,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* History Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle>{t.home.checkHistory}</CardTitle>
-              <CardDescription>
-                {t.home.checkHistoryDesc}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {batchesQuery.isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : batchesQuery.data?.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Phone className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>{t.home.noChecksYet}</p>
-                  <p className="text-sm">{t.home.startByEntering}</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                  {batchesQuery.data?.map((batch) => (
-                    <div
-                      key={batch.id}
-                      className={`p-4 rounded-lg border cursor-pointer transition-all hover:border-primary/50 ${
-                        currentBatchId === batch.id ? "border-primary bg-primary/5" : ""
-                      }`}
-                      onClick={() => setCurrentBatchId(batch.id)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium">{batch.name || `Проверка #${batch.id}`}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(batch.createdAt).toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={batch.status === "completed" ? "default" : "secondary"}>
-                              {batch.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {batch.validNumbers}/{batch.totalNumbers} {t.home.valid}
-                          </p>
-                        </div>
-                      </div>
-                      {batch.status === "processing" && (
-                        <div className="mt-3 space-y-1">
-                          <div className="flex justify-between items-center text-xs text-muted-foreground">
-                            <span>
-                              {t.home.progressProcessing || "Обрабатывается"}: {batch.processedNumbers} {t.home.progressOf || "из"} {batch.totalNumbers}
-                            </span>
-                            <span className="font-medium text-primary">
-                              {Math.round((batch.processedNumbers / batch.totalNumbers) * 100)}% {t.home.progressPercent || "выполнено"}
-                            </span>
-                          </div>
-                          <Progress 
-                            value={(batch.processedNumbers / batch.totalNumbers) * 100} 
-                            className="h-2 [&>div]:bg-primary [&>div]:transition-all [&>div]:duration-300"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
         </div>
 
         {/* Results Section */}
