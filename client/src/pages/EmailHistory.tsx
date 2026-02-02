@@ -41,7 +41,8 @@ import {
   Clock,
   Search,
   ArrowUpDown,
-  User as UserIcon
+  User as UserIcon,
+  Eye
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -424,6 +425,13 @@ export default function EmailHistory() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setLocation(`/email?batch=${batch.id}`)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">

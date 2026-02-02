@@ -37,7 +37,8 @@ import {
   Wallet,
   ArrowUpDown,
   Filter,
-  BarChart3
+  BarChart3,
+  User as UserIcon
 } from "lucide-react";
 import { toast } from "sonner";
 import CostCalculator from "@/components/CostCalculator";
@@ -115,6 +116,12 @@ export default function Home() {
   const incompleteBatchesQuery = trpc.hlr.getIncompleteBatches.useQuery();
   const resultsQuery = trpc.hlr.getResults.useQuery(
     currentBatchId !== null ? { batchId: currentBatchId, page: 1, pageSize: 1000 } : { batchId: -1, page: 1, pageSize: 1000 },
+    { enabled: currentBatchId !== null && currentBatchId > 0 }
+  );
+  
+  // Get batch info (including owner for admin)
+  const batchQuery = trpc.hlr.getBatch.useQuery(
+    { batchId: currentBatchId! },
     { enabled: currentBatchId !== null && currentBatchId > 0 }
   );
   
@@ -774,7 +781,16 @@ export default function Home() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle>{t.home.results}</CardTitle>
+                  <CardTitle className="flex items-center gap-3">
+                    {t.home.results}
+                    {/* Show batch owner if admin viewing another user's batch */}
+                    {batchQuery.data?.batchOwner && (
+                      <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-md border border-primary/20 text-sm font-normal">
+                        <UserIcon className="h-4 w-4 text-primary" />
+                        <span>Владелец: {batchQuery.data.batchOwner.name || batchQuery.data.batchOwner.username}</span>
+                      </div>
+                    )}
+                  </CardTitle>
                   <CardDescription>
                     {filteredResults.length} {t.home.resultsOf} {resultsQuery.data?.total || resultsData.length}
                   </CardDescription>

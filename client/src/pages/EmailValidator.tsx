@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,13 +11,40 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Mail, Search, FileSpreadsheet, Trash2, Download, CheckCircle, XCircle, AlertTriangle, HelpCircle, Loader2, Upload } from "lucide-react";
+import { 
+  Mail, 
+  Search, 
+  FileSpreadsheet, 
+  Trash2, 
+  Download, 
+  CheckCircle, 
+  XCircle, 
+  AlertTriangle, 
+  HelpCircle, 
+  Loader2, 
+  Upload,
+  User as UserIcon,
+  ArrowLeft
+} from "lucide-react";
 import FileDropZone from "@/components/FileDropZone";
+import { useSearch, useLocation } from "wouter";
 import * as XLSX from "xlsx";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function EmailValidator() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { user } = useAuth();
   const utils = trpc.useUtils();
+  const searchString = useSearch();
+  const [, setLocation] = useLocation();
+  const isAdmin = user?.role === "admin";
 
   // Single email check
   const [singleEmail, setSingleEmail] = useState("");
@@ -27,9 +55,32 @@ export default function EmailValidator() {
   const [batchEmails, setBatchEmails] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  
+  // Current batch ID from URL
+  const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("single");
+
+  // Handle batch parameter from URL (from History page)
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const batchParam = params.get('batch');
+    if (batchParam) {
+      const batchId = parseInt(batchParam, 10);
+      if (!isNaN(batchId) && batchId > 0) {
+        setCurrentBatchId(batchId);
+        setActiveTab("results");
+      }
+    }
+  }, [searchString]);
 
   // Batches list
   const batchesQuery = trpc.email.listBatches.useQuery();
+  
+  // Get batch results when viewing from history
+  const batchQuery = trpc.email.getBatch.useQuery(
+    { batchId: currentBatchId! },
+    { enabled: currentBatchId !== null }
+  );
 
   // Mutations
   const checkSingleMutation = trpc.email.checkSingle.useMutation({
@@ -175,6 +226,166 @@ export default function EmailValidator() {
     }
   };
 
+  const getContent = () => {
+    if (language === "ru") {
+      return {
+        viewingBatch: "Просмотр результатов",
+        owner: "Владелец",
+        backToHistory: "Назад к истории",
+        results: "Результаты",
+      };
+    } else if (language === "uk") {
+      return {
+        viewingBatch: "Перегляд результатів",
+        owner: "Власник",
+        backToHistory: "Назад до історії",
+        results: "Результати",
+      };
+    }
+    return {
+      viewingBatch: "Viewing results",
+      owner: "Owner",
+      backToHistory: "Back to history",
+      results: "Results",
+    };
+  };
+
+  const content = getContent();
+
+  // If viewing a specific batch from history
+  if (currentBatchId && activeTab === "results") {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          {/* Header with back button */}
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setCurrentBatchId(null);
+                setActiveTab("single");
+                setLocation("/email-history");
+              }}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              {content.backToHistory}
+            </Button>
+          </div>
+
+          {/* Batch info card */}
+          {batchQuery.isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : batchQuery.data ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Mail className="h-5 w-5 text-blue-500" />
+                        {batchQuery.data.batch.name}
+                      </CardTitle>
+                      <CardDescription>
+                        {new Date(batchQuery.data.batch.createdAt).toLocaleString()}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {/* Show batch owner if admin viewing another user's batch */}
+                      {batchQuery.data.batchOwner && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-md border border-primary/20">
+                          <UserIcon className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-medium">
+                            {content.owner}: {batchQuery.data.batchOwner.name || batchQuery.data.batchOwner.username}
+                          </span>
+                        </div>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => exportMutation.mutate({ batchId: currentBatchId })}
+                        disabled={exportMutation.isPending}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Excel
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-4 gap-4 text-center">
+                    <div className="p-4 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">{batchQuery.data.batch.totalEmails}</div>
+                      <div className="text-sm text-muted-foreground">{"Total"}</div>
+                    </div>
+                    <div className="p-4 bg-green-500/10 rounded-lg">
+                      <div className="text-2xl font-bold text-green-500">{batchQuery.data.batch.validEmails}</div>
+                      <div className="text-sm text-muted-foreground">{t.email?.valid || "Valid"}</div>
+                    </div>
+                    <div className="p-4 bg-red-500/10 rounded-lg">
+                      <div className="text-2xl font-bold text-red-500">{batchQuery.data.batch.invalidEmails}</div>
+                      <div className="text-sm text-muted-foreground">{t.email?.invalid || "Invalid"}</div>
+                    </div>
+                    <div className="p-4 bg-yellow-500/10 rounded-lg">
+                      <div className="text-2xl font-bold text-yellow-500">{batchQuery.data.batch.riskyEmails}</div>
+                      <div className="text-sm text-muted-foreground">{t.email?.risky || "Risky"}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Results table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>{content.results}</CardTitle>
+                  <CardDescription>
+                    {batchQuery.data.results.length} {t.email?.emails || "emails"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Email</TableHead>
+                          <TableHead>{t.email?.result || "Status"}</TableHead>
+                          <TableHead>{t.email?.result || "Result"}</TableHead>
+                          <TableHead>{t.email?.subresult || "Subresult"}</TableHead>
+                          <TableHead>{t.email?.freeProvider || "Free"}</TableHead>
+                          <TableHead>{t.email?.roleEmail || "Role"}</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {batchQuery.data.results.map((result: any) => (
+                          <TableRow key={result.id}>
+                            <TableCell className="font-mono">{result.email}</TableCell>
+                            <TableCell>{getStatusBadge(result.status)}</TableCell>
+                            <TableCell>{result.result}</TableCell>
+                            <TableCell>{result.subresult || "—"}</TableCell>
+                            <TableCell>{result.isFree ? "✓" : "—"}</TableCell>
+                            <TableCell>{result.isRole ? "✓" : "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                {t.email?.noBatches || "Batch not found"}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -190,7 +401,7 @@ export default function EmailValidator() {
         </div>
 
         {/* Main Tabs */}
-        <Tabs defaultValue="single" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-2 max-w-md">
             <TabsTrigger value="single">
               {t.email?.singleCheck || "Single Check"}
@@ -334,80 +545,6 @@ export default function EmailValidator() {
                     </>
                   )}
                 </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* History Tab */}
-          <TabsContent value="history" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t.email?.verificationHistory || "Verification History"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {batchesQuery.isLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : batchesQuery.data?.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {t.email?.noBatches || "No batches yet"}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {batchesQuery.data?.map((batch) => (
-                      <Card key={batch.id} className="bg-card/50">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-medium">{batch.name}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                {new Date(batch.createdAt).toLocaleString()}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2 text-sm">
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                <span>{batch.validEmails}</span>
-                                <XCircle className="h-4 w-4 text-red-500 ml-2" />
-                                <span>{batch.invalidEmails}</span>
-                                <AlertTriangle className="h-4 w-4 text-yellow-500 ml-2" />
-                                <span>{batch.riskyEmails}</span>
-                              </div>
-                              <Badge variant={batch.status === "completed" ? "default" : "secondary"}>
-                                {batch.status}
-                              </Badge>
-                              <div className="flex gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => exportMutation.mutate({ batchId: batch.id })}
-                                  disabled={exportMutation.isPending}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => deleteBatchMutation.mutate({ batchId: batch.id })}
-                                  disabled={deleteBatchMutation.isPending}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                          {batch.status === "processing" && (
-                            <Progress
-                              value={(batch.processedEmails / batch.totalEmails) * 100}
-                              className="mt-2"
-                            />
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
