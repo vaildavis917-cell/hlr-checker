@@ -106,9 +106,9 @@ export default function Dashboard() {
         </div>
 
         {/* Usage Limits */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {/* Daily Limit */}
-          <Card className={dailyProgress >= 100 ? "border-destructive" : isDailyWarning ? "border-yellow-500" : ""}>
+          <Card className={`h-[140px] ${dailyProgress >= 100 ? "border-destructive" : isDailyWarning ? "border-yellow-500" : ""}`}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
@@ -169,7 +169,7 @@ export default function Dashboard() {
           )}
 
           {/* Monthly Limit */}
-          <Card className={monthlyProgress >= 100 ? "border-destructive" : isMonthlyWarning ? "border-yellow-500" : ""}>
+          <Card className={`h-[140px] ${monthlyProgress >= 100 ? "border-destructive" : isMonthlyWarning ? "border-yellow-500" : ""}`}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
