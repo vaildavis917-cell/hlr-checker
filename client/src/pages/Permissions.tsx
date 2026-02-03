@@ -101,7 +101,6 @@ export default function Permissions() {
   
   const permissions = availablePermissionsQuery.data?.permissions || [];
   const descriptions = availablePermissionsQuery.data?.descriptions || {};
-  const defaults = availablePermissionsQuery.data?.defaults || {};
   const roleData = rolePermissionsQuery.data || [];
   
   const groupedPermissions = groupPermissions(permissions);

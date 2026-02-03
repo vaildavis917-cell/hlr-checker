@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -24,7 +24,8 @@ import {
   Loader2, 
   Upload,
   User as UserIcon,
-  ArrowLeft
+  ArrowLeft,
+  ArrowUpDown
 } from "lucide-react";
 import FileDropZone from "@/components/FileDropZone";
 import { useSearch, useLocation } from "wouter";
@@ -37,6 +38,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export default function EmailValidator() {
   const { t, language } = useLanguage();
@@ -59,16 +70,37 @@ export default function EmailValidator() {
   // Current batch ID from URL
   const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("single");
+  const [resumeBatchId, setResumeBatchId] = useState<number | null>(null);
+  const [isResuming, setIsResuming] = useState(false);
 
-  // Handle batch parameter from URL (from History page)
+  // Export dialog state
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [exportBatchId, setExportBatchId] = useState<number | null>(null);
+  const [selectedExportFields, setSelectedExportFields] = useState<string[]>(["email", "quality", "result"]);
+
+  // Sorting state for results table
+  type SortField = "email" | "quality" | "result" | "subresult" | "isFree" | "isRole";
+  type SortDirection = "asc" | "desc";
+  const [sortField, setSortField] = useState<SortField>("email");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  // Handle batch/resume parameter from URL (from History page)
   useEffect(() => {
     const params = new URLSearchParams(searchString);
     const batchParam = params.get('batch');
+    const resumeParam = params.get('resume');
+    
     if (batchParam) {
       const batchId = parseInt(batchParam, 10);
       if (!isNaN(batchId) && batchId > 0) {
         setCurrentBatchId(batchId);
         setActiveTab("results");
+      }
+    } else if (resumeParam) {
+      const batchId = parseInt(resumeParam, 10);
+      if (!isNaN(batchId) && batchId > 0) {
+        setResumeBatchId(batchId);
+        setActiveTab("batch");
       }
     }
   }, [searchString]);
@@ -119,6 +151,36 @@ export default function EmailValidator() {
     },
   });
 
+  // Resume batch mutation
+  const resumeBatchMutation = trpc.email.resumeBatch.useMutation({
+    onSuccess: (data) => {
+      const resumeMsg = language === "ru" 
+        ? `Батч возобновлен: ${data.resumed} обработано`
+        : language === "uk"
+        ? `Батч відновлено: ${data.resumed} оброблено`
+        : `Batch resumed: ${data.resumed} processed`;
+      toast.success(resumeMsg);
+      utils.email.listBatches.invalidate();
+      setIsResuming(false);
+      setResumeBatchId(null);
+      setBatchEmails("");
+      setLocation("/email-history");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+      setIsResuming(false);
+    },
+  });
+
+  // Get batch info for resume
+  const resumeBatchQuery = trpc.email.getBatch.useQuery(
+    { batchId: resumeBatchId! },
+    { enabled: resumeBatchId !== null }
+  );
+
+  // Get available export fields
+  const exportFieldsQuery = trpc.email.getExportFields.useQuery();
+
   const exportMutation = trpc.email.exportXlsx.useMutation({
     onSuccess: (data) => {
       const byteCharacters = atob(data.data);
@@ -134,6 +196,29 @@ export default function EmailValidator() {
       a.download = data.filename;
       a.click();
       URL.revokeObjectURL(url);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Export with custom fields mutation
+  const exportWithFieldsMutation = trpc.email.exportWithFields.useMutation({
+    onSuccess: (data) => {
+      const byteCharacters = atob(data.data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsExportDialogOpen(false);
     },
     onError: (error) => {
       toast.error(error.message);
@@ -169,6 +254,26 @@ export default function EmailValidator() {
     });
   };
 
+  const handleResume = () => {
+    if (!resumeBatchId) return;
+    
+    const emails = batchEmails
+      .split(/[\n,;]/)
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0);
+
+    if (emails.length === 0) {
+      toast.error(t.email?.noEmails || "No emails provided");
+      return;
+    }
+
+    setIsResuming(true);
+    resumeBatchMutation.mutate({
+      batchId: resumeBatchId,
+      emails,
+    });
+  };
+
   const handleFileUpload = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -199,6 +304,45 @@ export default function EmailValidator() {
       reader.readAsText(file);
     }
   };
+
+  // Handle sort
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Sort results
+  const sortedResults = useMemo(() => {
+    if (!batchQuery.data?.results) return [];
+    return [...batchQuery.data.results].sort((a: any, b: any) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+      
+      // Handle boolean fields
+      if (sortField === "isFree" || sortField === "isRole") {
+        aVal = aVal ? 1 : 0;
+        bVal = bVal ? 1 : 0;
+      }
+      
+      // Handle null/undefined
+      if (aVal == null) aVal = "";
+      if (bVal == null) bVal = "";
+      
+      // String comparison
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortDirection === "asc" 
+          ? aVal.localeCompare(bVal)
+          : bVal.localeCompare(aVal);
+      }
+      
+      // Number comparison
+      return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+    });
+  }, [batchQuery.data?.results, sortField, sortDirection]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -349,19 +493,49 @@ export default function EmailValidator() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Email</TableHead>
-                          <TableHead>{t.email?.result || "Status"}</TableHead>
-                          <TableHead>{t.email?.result || "Result"}</TableHead>
-                          <TableHead>{t.email?.subresult || "Subresult"}</TableHead>
-                          <TableHead>{t.email?.freeProvider || "Free"}</TableHead>
-                          <TableHead>{t.email?.roleEmail || "Role"}</TableHead>
+                          <TableHead>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort("email")}>
+                              Email
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort("quality")}>
+                              {t.email?.result || "Status"}
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort("result")}>
+                              {t.email?.result || "Result"}
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort("subresult")}>
+                              {t.email?.subresult || "Subresult"}
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort("isFree")}>
+                              {t.email?.freeProvider || "Free"}
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableHead>
+                          <TableHead>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2" onClick={() => handleSort("isRole")}>
+                              {t.email?.roleEmail || "Role"}
+                              <ArrowUpDown className="ml-1 h-3 w-3" />
+                            </Button>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {batchQuery.data.results.map((result: any) => (
+                        {sortedResults.map((result: any) => (
                           <TableRow key={result.id}>
                             <TableCell className="font-mono">{result.email}</TableCell>
-                            <TableCell>{getStatusBadge(result.status)}</TableCell>
+                            <TableCell>{getStatusBadge(result.quality)}</TableCell>
                             <TableCell>{result.result}</TableCell>
                             <TableCell>{result.subresult || "—"}</TableCell>
                             <TableCell>{result.isFree ? "✓" : "—"}</TableCell>
@@ -482,26 +656,86 @@ export default function EmailValidator() {
 
           {/* Batch Check Tab */}
           <TabsContent value="batch" className="space-y-4">
+            {/* Resume mode banner */}
+            {resumeBatchId && resumeBatchQuery.data && (
+              <Card className="border-primary/50 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-primary" />
+                    {language === "ru" ? "Возобновление проверки" : language === "uk" ? "Відновлення перевірки" : "Resume Check"}
+                  </CardTitle>
+                  <CardDescription>
+                    {language === "ru" 
+                      ? `Батч: ${resumeBatchQuery.data.batch.name} • Обработано: ${resumeBatchQuery.data.batch.processedEmails}/${resumeBatchQuery.data.batch.totalEmails}`
+                      : language === "uk"
+                      ? `Батч: ${resumeBatchQuery.data.batch.name} • Оброблено: ${resumeBatchQuery.data.batch.processedEmails}/${resumeBatchQuery.data.batch.totalEmails}`
+                      : `Batch: ${resumeBatchQuery.data.batch.name} • Processed: ${resumeBatchQuery.data.batch.processedEmails}/${resumeBatchQuery.data.batch.totalEmails}`}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className="text-primary border-primary">
+                      {language === "ru" ? "Валидных" : language === "uk" ? "Валідних" : "Valid"}: {resumeBatchQuery.data.batch.validEmails}
+                    </Badge>
+                    <Badge variant="outline" className="text-destructive border-destructive">
+                      {language === "ru" ? "Невалидных" : language === "uk" ? "Невалідних" : "Invalid"}: {resumeBatchQuery.data.batch.invalidEmails}
+                    </Badge>
+                    <Badge variant="outline" className="text-yellow-500 border-yellow-500">
+                      {language === "ru" ? "Рискованных" : language === "uk" ? "Ризикованих" : "Risky"}: {resumeBatchQuery.data.batch.riskyEmails}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {language === "ru" 
+                      ? "Загрузите исходный файл с email адресами для продолжения проверки. Уже обработанные адреса будут пропущены."
+                      : language === "uk"
+                      ? "Завантажте вихідний файл з email адресами для продовження перевірки. Вже оброблені адреси будуть пропущені."
+                      : "Upload the original file with email addresses to continue verification. Already processed addresses will be skipped."}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      setResumeBatchId(null);
+                      setBatchEmails("");
+                      setLocation("/email");
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    {language === "ru" ? "Отменить" : language === "uk" ? "Скасувати" : "Cancel"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
-                <CardTitle>{t.email?.batchVerification || "Batch Verification"}</CardTitle>
+                <CardTitle>
+                  {resumeBatchId 
+                    ? (language === "ru" ? "Загрузите файл для возобновления" : language === "uk" ? "Завантажте файл для відновлення" : "Upload File to Resume")
+                    : (t.email?.batchVerification || "Batch Verification")}
+                </CardTitle>
                 <CardDescription>
-                  {t.email?.uploadOrPaste || "Upload a file or paste email addresses"}
+                  {resumeBatchId
+                    ? (language === "ru" ? "Загрузите исходный файл с всеми email адресами" : language === "uk" ? "Завантажте вихідний файл з усіма email адресами" : "Upload the original file with all email addresses")
+                    : (t.email?.uploadOrPaste || "Upload a file or paste email addresses")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Input
-                  placeholder={t.email?.batchName || "Batch name"}
-                  value={batchName}
-                  onChange={(e) => setBatchName(e.target.value)}
-                />
+                {!resumeBatchId && (
+                  <Input
+                    placeholder={t.email?.batchName || "Batch name"}
+                    value={batchName}
+                    onChange={(e) => setBatchName(e.target.value)}
+                  />
+                )}
 
                 <FileDropZone
                   onFileLoaded={(emails, fileName) => {
                     setBatchEmails(emails.join("\n"));
-                    if (!batchName) setBatchName(fileName.replace(/\.[^/.]+$/, ""));
+                    if (!batchName && !resumeBatchId) setBatchName(fileName.replace(/\.[^/.]+$/, ""));
                   }}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isResuming}
                 />
 
                 <div className="relative">
@@ -510,7 +744,7 @@ export default function EmailValidator() {
                     value={batchEmails}
                     onChange={(e) => setBatchEmails(e.target.value)}
                     rows={8}
-                    disabled={isProcessing}
+                    disabled={isProcessing || isResuming}
                   />
                   {batchEmails && (
                     <div className="absolute bottom-2 right-2 text-xs text-muted-foreground">
@@ -519,36 +753,115 @@ export default function EmailValidator() {
                   )}
                 </div>
 
-                {isProcessing && (
+                {(isProcessing || isResuming) && (
                   <div className="space-y-2">
                     <Progress value={progress} />
                     <p className="text-sm text-center text-muted-foreground">
-                      {t.email?.processing || "Processing..."}
+                      {isResuming 
+                        ? (language === "ru" ? "Возобновление..." : language === "uk" ? "Відновлення..." : "Resuming...")
+                        : (t.email?.processing || "Processing...")}
                     </p>
                   </div>
                 )}
 
-                <Button
-                  onClick={handleBatchStart}
-                  disabled={isProcessing || !batchEmails.trim() || !batchName.trim()}
-                  className="w-full"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      {t.email?.processing || "Processing..."}
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      {t.email?.startVerification || "Start Verification"}
-                    </>
-                  )}
-                </Button>
+                {resumeBatchId ? (
+                  <Button
+                    onClick={handleResume}
+                    disabled={isResuming || !batchEmails.trim()}
+                    className="w-full"
+                  >
+                    {isResuming ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        {language === "ru" ? "Возобновление..." : language === "uk" ? "Відновлення..." : "Resuming..."}
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        {language === "ru" ? "Возобновить проверку" : language === "uk" ? "Відновити перевірку" : "Resume Verification"}
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleBatchStart}
+                    disabled={isProcessing || !batchEmails.trim() || !batchName.trim()}
+                    className="w-full"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        {t.email?.processing || "Processing..."}
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        {t.email?.startVerification || "Start Verification"}
+                      </>
+                    )}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Export Fields Dialog */}
+        <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {language === "ru" ? "Выберите поля для экспорта" : language === "uk" ? "Виберіть поля для експорту" : "Select Export Fields"}
+              </DialogTitle>
+              <DialogDescription>
+                {language === "ru" ? "Выберите поля, которые будут включены в экспорт" : language === "uk" ? "Виберіть поля, які будуть включені в експорт" : "Select fields to include in the export"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-4">
+              {exportFieldsQuery.data?.map((field) => (
+                <div key={field.key} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`export-${field.key}`}
+                    checked={selectedExportFields.includes(field.key)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedExportFields([...selectedExportFields, field.key]);
+                      } else {
+                        setSelectedExportFields(selectedExportFields.filter(f => f !== field.key));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={`export-${field.key}`} className="cursor-pointer">
+                    {field.label[language as keyof typeof field.label] || field.label.en}
+                  </Label>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsExportDialogOpen(false)}>
+                {language === "ru" ? "Отмена" : language === "uk" ? "Скасувати" : "Cancel"}
+              </Button>
+              <Button
+                onClick={() => {
+                  if (exportBatchId && selectedExportFields.length > 0) {
+                    exportWithFieldsMutation.mutate({
+                      batchId: exportBatchId,
+                      fields: selectedExportFields,
+                    });
+                  }
+                }}
+                disabled={selectedExportFields.length === 0 || exportWithFieldsMutation.isPending}
+              >
+                {exportWithFieldsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {language === "ru" ? "Экспорт" : language === "uk" ? "Експорт" : "Export"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

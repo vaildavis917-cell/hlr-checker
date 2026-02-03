@@ -26,6 +26,7 @@ import EmailValidator from "./pages/EmailValidator";
 import EmailLookup from "./pages/EmailLookup";
 import AdminEmailHistory from "./pages/AdminEmailHistory";
 import EmailHistory from "./pages/EmailHistory";
+import RolesManagement from "./pages/RolesManagement";
 
 function Router() {
   return (
@@ -52,6 +53,7 @@ function Router() {
       <Route path={"/email-lookup"} component={EmailLookup} />
 
       <Route path={"/email-history"} component={EmailHistory} />
+      <Route path={"/admin/roles"} component={RolesManagement} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

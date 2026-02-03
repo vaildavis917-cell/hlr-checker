@@ -1,6 +1,6 @@
 import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest, systemSettings, SystemSetting, emailBatches, EmailBatch, InsertEmailBatch, emailResults, EmailResult, InsertEmailResult, emailCache, EmailCache, InsertEmailCache } from "../drizzle/schema";
+import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest, systemSettings, SystemSetting, emailBatches, EmailBatch, InsertEmailBatch, emailResults, EmailResult, InsertEmailResult, emailCache, EmailCache, InsertEmailCache, customRoles, CustomRole, InsertCustomRole } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -1559,4 +1559,133 @@ export async function getAllEmailBatches(): Promise<EmailBatch[]> {
   return await db.select()
     .from(emailBatches)
     .orderBy(desc(emailBatches.createdAt));
+}
+
+
+// =====================
+// Custom Roles
+// =====================
+
+export async function createCustomRole(data: {
+  name: string;
+  description?: string;
+  permissions: string[];
+  color?: string;
+  isSystem?: boolean;
+}): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(customRoles).values({
+    name: data.name,
+    description: data.description || null,
+    permissions: JSON.stringify(data.permissions),
+    color: data.color || "#6366f1",
+    isSystem: data.isSystem || false,
+  });
+  
+  return result[0].insertId;
+}
+
+export async function getAllCustomRoles(): Promise<CustomRole[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(customRoles).orderBy(customRoles.name);
+}
+
+export async function getCustomRoleById(id: number): Promise<CustomRole | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select()
+    .from(customRoles)
+    .where(eq(customRoles.id, id))
+    .limit(1);
+  
+  return results[0] || null;
+}
+
+export async function getCustomRoleByName(name: string): Promise<CustomRole | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const results = await db.select()
+    .from(customRoles)
+    .where(eq(customRoles.name, name))
+    .limit(1);
+  
+  return results[0] || null;
+}
+
+export async function updateCustomRole(id: number, data: {
+  name?: string;
+  description?: string;
+  permissions?: string[];
+  color?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const updates: Partial<InsertCustomRole> = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.description !== undefined) updates.description = data.description;
+  if (data.permissions !== undefined) updates.permissions = JSON.stringify(data.permissions);
+  if (data.color !== undefined) updates.color = data.color;
+  
+  await db.update(customRoles)
+    .set(updates)
+    .where(eq(customRoles.id, id));
+}
+
+export async function deleteCustomRole(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(customRoles).where(eq(customRoles.id, id));
+}
+
+export async function initializeSystemRoles(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  
+  const systemRoles = [
+    { name: "viewer", description: "Can only view history", permissions: ["hlr.history", "email.history"], color: "#94a3b8", isSystem: true },
+    { name: "user", description: "Standard user with check permissions", permissions: ["hlr.single", "hlr.batch", "hlr.export", "hlr.history", "email.single", "email.batch", "email.export", "email.history", "tools.duplicates"], color: "#22c55e", isSystem: true },
+    { name: "manager", description: "Can manage users and view audit logs", permissions: ["hlr.single", "hlr.batch", "hlr.export", "hlr.history", "hlr.delete", "email.single", "email.batch", "email.export", "email.history", "email.delete", "tools.duplicates", "admin.users", "admin.audit", "admin.sessions"], color: "#f59e0b", isSystem: true },
+    { name: "admin", description: "Full access to all features", permissions: ["hlr.single", "hlr.batch", "hlr.export", "hlr.history", "hlr.delete", "email.single", "email.batch", "email.export", "email.history", "email.delete", "tools.duplicates", "admin.users", "admin.users.create", "admin.users.edit", "admin.users.delete", "admin.users.limits", "admin.audit", "admin.sessions", "admin.balance", "admin.settings", "admin.permissions"], color: "#ef4444", isSystem: true },
+  ];
+  
+  for (const role of systemRoles) {
+    const existing = await getCustomRoleByName(role.name);
+    if (!existing) {
+      await createCustomRole(role);
+    }
+  }
+}
+
+// Get incomplete email batches for resume
+export async function getIncompleteEmailBatches(userId: number): Promise<EmailBatch[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select()
+    .from(emailBatches)
+    .where(and(
+      eq(emailBatches.userId, userId),
+      eq(emailBatches.status, "processing")
+    ))
+    .orderBy(desc(emailBatches.createdAt));
+}
+
+// Get already processed emails for a batch (for resume)
+export async function getProcessedEmailsForBatch(batchId: number): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const results = await db.select({ email: emailResults.email })
+    .from(emailResults)
+    .where(eq(emailResults.batchId, batchId));
+  
+  return results.map(r => r.email);
 }

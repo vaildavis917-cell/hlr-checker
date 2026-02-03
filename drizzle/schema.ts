@@ -465,3 +465,25 @@ export const emailCache = mysqlTable("email_cache", {
 });
 export type EmailCache = typeof emailCache.$inferSelect;
 export type InsertEmailCache = typeof emailCache.$inferInsert;
+
+
+/**
+ * Custom roles - user-defined roles with custom permissions
+ */
+export const customRoles = mysqlTable("custom_roles", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Role name (unique) */
+  name: varchar("name", { length: 64 }).notNull().unique(),
+  /** Role description */
+  description: varchar("description", { length: 256 }),
+  /** JSON array of permission strings */
+  permissions: text("permissions").notNull(),
+  /** Is this a system role (cannot be deleted) */
+  isSystem: boolean("isSystem").default(false).notNull(),
+  /** Color for UI display (hex) */
+  color: varchar("color", { length: 7 }).default("#6366f1"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CustomRole = typeof customRoles.$inferSelect;
+export type InsertCustomRole = typeof customRoles.$inferInsert;

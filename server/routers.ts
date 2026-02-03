@@ -82,6 +82,15 @@ import {
   getEmailsFromCacheBulk,
   getAllEmailBatches,
   getUserById,
+  createCustomRole,
+  getAllCustomRoles,
+  getCustomRoleById,
+  getCustomRoleByName,
+  updateCustomRole,
+  deleteCustomRole,
+  initializeSystemRoles,
+  getIncompleteEmailBatches,
+  getProcessedEmailsForBatch,
 } from "./db";
 import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
@@ -813,6 +822,125 @@ const adminRouter = router({
     
     return { success: true };
   }),
+
+  // =====================
+  // Custom Roles Management
+  // =====================
+
+  // List all custom roles
+  listRoles: adminProcedure.query(async () => {
+    await initializeSystemRoles();
+    const roles = await getAllCustomRoles();
+    return roles.map(role => ({
+      ...role,
+      permissions: JSON.parse(role.permissions) as string[],
+    }));
+  }),
+
+  // Create a new custom role
+  createRole: adminProcedure
+    .input(z.object({
+      name: z.string().min(2).max(64),
+      description: z.string().max(256).optional(),
+      permissions: z.array(z.string()),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if role name already exists
+      const existing = await getCustomRoleByName(input.name);
+      if (existing) {
+        throw new TRPCError({ code: "CONFLICT", message: "Role with this name already exists" });
+      }
+      
+      const roleId = await createCustomRole({
+        name: input.name,
+        description: input.description,
+        permissions: input.permissions,
+        color: input.color,
+      });
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "create_custom_role",
+        details: `Created custom role: ${input.name}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { roleId };
+    }),
+
+  // Update a custom role
+  updateRole: adminProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(2).max(64).optional(),
+      description: z.string().max(256).optional(),
+      permissions: z.array(z.string()).optional(),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const role = await getCustomRoleById(input.id);
+      if (!role) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Role not found" });
+      }
+      
+      if (role.isSystem) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Cannot modify system roles" });
+      }
+      
+      // Check if new name conflicts with existing role
+      if (input.name && input.name !== role.name) {
+        const existing = await getCustomRoleByName(input.name);
+        if (existing) {
+          throw new TRPCError({ code: "CONFLICT", message: "Role with this name already exists" });
+        }
+      }
+      
+      await updateCustomRole(input.id, {
+        name: input.name,
+        description: input.description,
+        permissions: input.permissions,
+        color: input.color,
+      });
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "update_custom_role",
+        details: `Updated custom role: ${role.name}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true };
+    }),
+
+  // Delete a custom role
+  deleteRole: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const role = await getCustomRoleById(input.id);
+      if (!role) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Role not found" });
+      }
+      
+      if (role.isSystem) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Cannot delete system roles" });
+      }
+      
+      await deleteCustomRole(input.id);
+      
+      await logAction({
+        userId: ctx.user.id,
+        action: "delete_custom_role",
+        details: `Deleted custom role: ${role.name}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString(),
+        userAgent: ctx.req.headers["user-agent"],
+      });
+      
+      return { success: true };
+    }),
+
 });
 
 // Export templates router
@@ -1244,6 +1372,84 @@ const emailRouter = router({
       };
     }),
 
+  // Get available export fields for email results
+  getExportFields: protectedProcedure.query(() => {
+    return [
+      { key: "email", label: { ru: "Email", uk: "Email", en: "Email" } },
+      { key: "quality", label: { ru: "Качество", uk: "Якість", en: "Quality" } },
+      { key: "result", label: { ru: "Результат", uk: "Результат", en: "Result" } },
+      { key: "subresult", label: { ru: "Подрезультат", uk: "Підрезультат", en: "Subresult" } },
+      { key: "isFree", label: { ru: "Бесплатный провайдер", uk: "Безкоштовний провайдер", en: "Free Provider" } },
+      { key: "isRole", label: { ru: "Ролевой email", uk: "Рольовий email", en: "Role Email" } },
+      { key: "didYouMean", label: { ru: "Возможно вы имели в виду", uk: "Можливо ви мали на увазі", en: "Did You Mean" } },
+      { key: "error", label: { ru: "Ошибка", uk: "Помилка", en: "Error" } },
+    ];
+  }),
+
+  // Export batch with custom fields
+  exportWithFields: protectedProcedure
+    .input(z.object({ 
+      batchId: z.number(),
+      fields: z.array(z.string()),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const hasPermission = await userHasPermission(ctx.user.id, "hlr.export");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export" });
+      }
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      const results = await getEmailResultsByBatch(input.batchId);
+
+      const fieldMapping: Record<string, (r: any) => any> = {
+        email: (r) => r.email,
+        quality: (r) => r.quality,
+        result: (r) => r.result,
+        subresult: (r) => r.subresult || "",
+        isFree: (r) => r.isFree ? "Yes" : "No",
+        isRole: (r) => r.isRole ? "Yes" : "No",
+        didYouMean: (r) => r.didYouMean || "",
+        error: (r) => r.error || "",
+      };
+
+      const headerMapping: Record<string, string> = {
+        email: "Email",
+        quality: "Quality",
+        result: "Result",
+        subresult: "Subresult",
+        isFree: "Free Provider",
+        isRole: "Role Email",
+        didYouMean: "Did You Mean",
+        error: "Error",
+      };
+
+      const data = results.map(r => {
+        const row: Record<string, any> = {};
+        for (const field of input.fields) {
+          if (fieldMapping[field]) {
+            row[headerMapping[field] || field] = fieldMapping[field](r);
+          }
+        }
+        return row;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Email Results");
+      const buffer = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+
+      return {
+        filename: `email_results_${batch.name}_${new Date().toISOString().split("T")[0]}.xlsx`,
+        data: buffer,
+      };
+    }),
+
   // Get result descriptions for UI
   getDescriptions: publicProcedure.query(() => ({
     results: RESULT_DESCRIPTIONS,
@@ -1299,6 +1505,195 @@ const emailRouter = router({
       });
       
       return { success: true };
+    }),
+
+  // Get incomplete batches for resume
+  getIncompleteBatches: protectedProcedure.query(async ({ ctx }) => {
+    return await getIncompleteEmailBatches(ctx.user.id);
+  }),
+
+  // Resume an incomplete batch
+  resumeBatch: protectedProcedure
+    .input(z.object({
+      batchId: z.number(),
+      emails: z.array(z.string()).min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const hasPermission = await userHasPermission(ctx.user.id, "email.batch");
+      if (!hasPermission) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission for batch email check" });
+      }
+
+      const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API key not configured" });
+      }
+
+      const batch = await getEmailBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+      if (batch.status === "completed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Batch already completed" });
+      }
+
+      // Get already processed emails
+      const processedEmails = await getProcessedEmailsForBatch(input.batchId);
+      const processedSet = new Set(processedEmails.map(e => e.toLowerCase()));
+
+      // Filter out already processed emails
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const remainingEmails = input.emails
+        .filter(e => emailRegex.test(e.trim()))
+        .map(e => e.trim().toLowerCase())
+        .filter(e => !processedSet.has(e));
+
+      if (remainingEmails.length === 0) {
+        await completeEmailBatch(input.batchId);
+        return {
+          batchId: input.batchId,
+          totalEmails: batch.totalEmails,
+          processed: batch.processedEmails,
+          valid: batch.validEmails,
+          invalid: batch.invalidEmails,
+          risky: batch.riskyEmails,
+          unknown: batch.unknownEmails,
+          resumed: 0,
+        };
+      }
+
+      // Check email limits
+      const limitsCheck = await checkUserLimits(ctx.user.id, remainingEmails.length, 'email');
+      if (!limitsCheck.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Email limit exceeded" });
+      }
+
+      // Log resume start
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_batch_resume",
+        details: `Resuming batch: ${batch.name}, Remaining: ${remainingEmails.length}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
+      // Check cache for existing results
+      const cacheMap = await getEmailsFromCacheBulk(remainingEmails);
+
+      // Process remaining emails
+      let processed = batch.processedEmails || 0;
+      let valid = batch.validEmails || 0;
+      let invalid = batch.invalidEmails || 0;
+      let risky = batch.riskyEmails || 0;
+      let unknown = batch.unknownEmails || 0;
+
+      for (const email of remainingEmails) {
+        const cached = cacheMap.get(email);
+        if (cached) {
+          await saveEmailResult({
+            batchId: input.batchId,
+            email,
+            quality: cached.quality || "unknown",
+            result: cached.result || "unknown",
+            resultCode: cached.resultCode || 0,
+            subresult: cached.subresult || "",
+            isFree: cached.isFree || false,
+            isRole: cached.isRole || false,
+            didYouMean: cached.didYouMean || "",
+            executionTime: 0,
+          });
+
+          const status = getResultStatus(cached.result || "unknown");
+          if (status === "valid") valid++;
+          else if (status === "invalid") invalid++;
+          else if (status === "risky") risky++;
+          else unknown++;
+        } else {
+          try {
+            const result = await verifyEmail(email, apiKey);
+
+            await saveEmailResult({
+              batchId: input.batchId,
+              email: result.email,
+              quality: result.quality,
+              result: result.result,
+              resultCode: result.resultcode,
+              subresult: result.subresult,
+              isFree: result.free,
+              isRole: result.role,
+              didYouMean: result.didyoumean,
+              executionTime: result.executiontime,
+            });
+
+            await saveEmailToCache({
+              email,
+              quality: result.quality,
+              result: result.result,
+              resultCode: result.resultcode,
+              subresult: result.subresult,
+              isFree: result.free,
+              isRole: result.role,
+              didYouMean: result.didyoumean,
+            });
+
+            const status = getResultStatus(result.result);
+            if (status === "valid") valid++;
+            else if (status === "invalid") invalid++;
+            else if (status === "risky") risky++;
+            else unknown++;
+          } catch (error) {
+            await saveEmailResult({
+              batchId: input.batchId,
+              email,
+              quality: "bad",
+              result: "error",
+              resultCode: 0,
+              subresult: "",
+              isFree: false,
+              isRole: false,
+              didYouMean: "",
+              executionTime: 0,
+              error: error instanceof Error ? error.message : "Unknown error",
+            });
+            invalid++;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        processed++;
+        await updateEmailBatchProgress(input.batchId, processed, valid, invalid, risky, unknown);
+      }
+
+      await completeEmailBatch(input.batchId);
+
+      // Increment email checks counter
+      const apiCallCount = remainingEmails.length - Array.from(cacheMap.keys()).length;
+      if (apiCallCount > 0) {
+        await incrementUserChecks(ctx.user.id, apiCallCount, 'email');
+      }
+
+      await logAction({
+        userId: ctx.user.id,
+        action: "email_batch_resume_complete",
+        details: `Resumed batch: ${batch.name}, Processed: ${remainingEmails.length}`,
+        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
+        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      });
+
+      return {
+        batchId: input.batchId,
+        totalEmails: batch.totalEmails,
+        processed,
+        valid,
+        invalid,
+        risky,
+        unknown,
+        resumed: remainingEmails.length,
+      };
     }),
 });
 
