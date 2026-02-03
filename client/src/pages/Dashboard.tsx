@@ -78,7 +78,7 @@ export default function Dashboard() {
 
         {/* API Balances */}
         <div className="grid gap-4 md:grid-cols-2">
-          <Card>
+          <Card className="h-[120px]">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">{t.home.apiBalance} (HLR)</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
@@ -91,7 +91,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-[120px]">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">{t.home.apiBalance} (Email)</CardTitle>
               <Mail className="h-4 w-4 text-muted-foreground" />
