@@ -42,7 +42,8 @@ import {
   Search,
   ArrowUpDown,
   User as UserIcon,
-  Eye
+  Eye,
+  PlayCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -429,9 +430,21 @@ export default function EmailHistory() {
                               variant="ghost"
                               size="sm"
                               onClick={() => setLocation(`/email?batch=${batch.id}`)}
+                              title={language === "ru" ? "Просмотр" : language === "uk" ? "Перегляд" : "View"}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            {batch.status !== "completed" && batch.status !== "processing" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setLocation(`/email?resume=${batch.id}`)}
+                                title={language === "ru" ? "Возобновить" : language === "uk" ? "Відновити" : "Resume"}
+                                className="text-primary hover:text-primary"
+                              >
+                                <PlayCircle className="h-4 w-4" />
+                              </Button>
+                            )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
