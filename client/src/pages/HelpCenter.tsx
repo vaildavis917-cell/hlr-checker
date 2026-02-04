@@ -183,6 +183,52 @@ export default function HelpCenter() {
               </CardContent>
             </Card>
 
+            {/* Phone Number Types */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Phone className="h-5 w-5" />
+                  {content.hlr.numberTypes.title}
+                </CardTitle>
+                <CardDescription>{content.hlr.numberTypes.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[180px]">{content.hlr.numberTypes.typeHeader}</TableHead>
+                        <TableHead>{content.hlr.numberTypes.descHeader}</TableHead>
+                        <TableHead className="w-[150px]">{content.hlr.numberTypes.smsHeader}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {content.hlr.numberTypes.types.map((type: any, idx: number) => (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            <Badge variant={type.variant as any} className="text-xs">
+                              {type.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">{type.meaning}</TableCell>
+                          <TableCell className="text-sm">
+                            {type.sms ? (
+                              <span className="text-green-500">✅ {content.hlr.numberTypes.yes}</span>
+                            ) : (
+                              <span className="text-red-500">❌ {content.hlr.numberTypes.no}</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <p className="text-sm text-muted-foreground mt-4">
+                  {content.hlr.numberTypes.note}
+                </p>
+              </CardContent>
+            </Card>
+
             {/* Quality Score */}
             <Card>
               <CardHeader>
@@ -584,6 +630,29 @@ function getContent(lang: string) {
           actionHeader: "Что делать",
           codes: gsmCodesRu,
         },
+        numberTypes: {
+          title: "Типы телефонных номеров",
+          description: "Система определяет тип номера на основе данных оператора. Это помогает понять, можно ли отправить SMS на этот номер.",
+          typeHeader: "Тип номера",
+          descHeader: "Описание",
+          smsHeader: "SMS поддержка",
+          yes: "Да",
+          no: "Нет",
+          note: "💡 Совет: Для SMS-рассылок используйте только номера с типом 'mobile'. Стационарные телефоны (fixed_line) не могут принимать SMS.",
+          types: [
+            { label: "mobile", variant: "default", meaning: "Мобильный телефон. Основной тип для SMS-рассылок и звонков. Поддерживает все функции связи.", sms: true },
+            { label: "fixed_line", variant: "secondary", meaning: "Стационарный (проводной) телефон. Домашний или офисный телефон, подключённый кабелем. Не может принимать SMS.", sms: false },
+            { label: "fixed_line_or_mobile", variant: "secondary", meaning: "Может быть как стационарным, так и мобильным. В некоторых странах нельзя точно определить тип.", sms: true },
+            { label: "voip", variant: "outline", meaning: "VoIP номер (интернет-телефония). Номер, работающий через интернет (Skype, Viber Out и т.д.).", sms: false },
+            { label: "toll_free", variant: "outline", meaning: "Бесплатный номер (8-800). Звонки на этот номер бесплатны для звонящего.", sms: false },
+            { label: "premium_rate", variant: "destructive", meaning: "Платный номер. Звонки тарифицируются по повышенному тарифу (горячие линии, сервисы).", sms: false },
+            { label: "shared_cost", variant: "outline", meaning: "Номер с разделением стоимости. Часть стоимости звонка оплачивает владелец номера.", sms: false },
+            { label: "personal_number", variant: "outline", meaning: "Персональный номер. Номер, привязанный к человеку, а не к устройству.", sms: true },
+            { label: "pager", variant: "destructive", meaning: "Пейджер. Устаревшее устройство для приёма коротких сообщений.", sms: false },
+            { label: "uan", variant: "outline", meaning: "Универсальный номер доступа (UAN). Корпоративный номер с маршрутизацией звонков.", sms: false },
+            { label: "unknown", variant: "secondary", meaning: "Тип не определён. Не удалось получить информацию о типе номера.", sms: true },
+          ],
+        },
         quality: {
           title: "Оценка качества номера",
           description: "Система оценивает надёжность номера по шкале от 0 до 100 баллов",
@@ -835,6 +904,29 @@ function getContent(lang: string) {
           actionHeader: "Що робити",
           codes: gsmCodesUk,
         },
+        numberTypes: {
+          title: "Типи телефонних номерів",
+          description: "Система визначає тип номера на основі даних оператора. Це допомагає зрозуміти, чи можна надіслати SMS на цей номер.",
+          typeHeader: "Тип номера",
+          descHeader: "Опис",
+          smsHeader: "SMS підтримка",
+          yes: "Так",
+          no: "Ні",
+          note: "💡 Порада: Для SMS-розсилок використовуйте тільки номери з типом 'mobile'. Стаціонарні телефони (fixed_line) не можуть приймати SMS.",
+          types: [
+            { label: "mobile", variant: "default", meaning: "Мобільний телефон. Основний тип для SMS-розсилок та дзвінків. Підтримує всі функції зв'язку.", sms: true },
+            { label: "fixed_line", variant: "secondary", meaning: "Стаціонарний (провідний) телефон. Домашній або офісний телефон, підключений кабелем. Не може приймати SMS.", sms: false },
+            { label: "fixed_line_or_mobile", variant: "secondary", meaning: "Може бути як стаціонарним, так і мобільним. У деяких країнах неможливо точно визначити тип.", sms: true },
+            { label: "voip", variant: "outline", meaning: "VoIP номер (інтернет-телефонія). Номер, що працює через інтернет (Skype, Viber Out тощо).", sms: false },
+            { label: "toll_free", variant: "outline", meaning: "Безкоштовний номер (0-800). Дзвінки на цей номер безкоштовні для того, хто дзвонить.", sms: false },
+            { label: "premium_rate", variant: "destructive", meaning: "Платний номер. Дзвінки тарифікуються за підвищеним тарифом (гарячі лінії, сервіси).", sms: false },
+            { label: "shared_cost", variant: "outline", meaning: "Номер з розподілом вартості. Частину вартості дзвінка сплачує власник номера.", sms: false },
+            { label: "personal_number", variant: "outline", meaning: "Персональний номер. Номер, прив'язаний до людини, а не до пристрою.", sms: true },
+            { label: "pager", variant: "destructive", meaning: "Пейджер. Застарілий пристрій для прийому коротких повідомлень.", sms: false },
+            { label: "uan", variant: "outline", meaning: "Універсальний номер доступу (UAN). Корпоративний номер з маршрутизацією дзвінків.", sms: false },
+            { label: "unknown", variant: "secondary", meaning: "Тип не визначено. Не вдалося отримати інформацію про тип номера.", sms: true },
+          ],
+        },
         quality: {
           title: "Оцінка якості номера",
           description: "Система оцінює надійність номера за шкалою від 0 до 100 балів",
@@ -1085,6 +1177,29 @@ function getContent(lang: string) {
           statusHeader: "What it means",
           actionHeader: "What to do",
           codes: gsmCodesEn,
+        },
+        numberTypes: {
+          title: "Phone Number Types",
+          description: "The system determines the number type based on carrier data. This helps understand whether SMS can be sent to this number.",
+          typeHeader: "Number Type",
+          descHeader: "Description",
+          smsHeader: "SMS Support",
+          yes: "Yes",
+          no: "No",
+          note: "💡 Tip: For SMS campaigns, use only numbers with type 'mobile'. Landline phones (fixed_line) cannot receive SMS.",
+          types: [
+            { label: "mobile", variant: "default", meaning: "Mobile phone. Primary type for SMS campaigns and calls. Supports all communication features.", sms: true },
+            { label: "fixed_line", variant: "secondary", meaning: "Landline (wired) phone. Home or office phone connected by cable. Cannot receive SMS.", sms: false },
+            { label: "fixed_line_or_mobile", variant: "secondary", meaning: "Could be either landline or mobile. In some countries, the exact type cannot be determined.", sms: true },
+            { label: "voip", variant: "outline", meaning: "VoIP number (internet telephony). Number operating via internet (Skype, Viber Out, etc.).", sms: false },
+            { label: "toll_free", variant: "outline", meaning: "Toll-free number (1-800). Calls to this number are free for the caller.", sms: false },
+            { label: "premium_rate", variant: "destructive", meaning: "Premium rate number. Calls are charged at higher rates (hotlines, services).", sms: false },
+            { label: "shared_cost", variant: "outline", meaning: "Shared cost number. Part of the call cost is paid by the number owner.", sms: false },
+            { label: "personal_number", variant: "outline", meaning: "Personal number. Number tied to a person, not a device.", sms: true },
+            { label: "pager", variant: "destructive", meaning: "Pager. Obsolete device for receiving short messages.", sms: false },
+            { label: "uan", variant: "outline", meaning: "Universal Access Number (UAN). Corporate number with call routing.", sms: false },
+            { label: "unknown", variant: "secondary", meaning: "Type not determined. Could not retrieve information about the number type.", sms: true },
+          ],
         },
         quality: {
           title: "Number Quality Score",
