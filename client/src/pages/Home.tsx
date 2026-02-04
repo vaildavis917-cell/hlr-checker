@@ -6,6 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -973,7 +979,25 @@ export default function Home() {
                             <TableCell>
                               <div>
                                 <p className="font-medium">{result.currentCarrierName || "-"}</p>
-                                <p className="text-xs text-muted-foreground">{result.currentNetworkType || ""}</p>
+                                {result.currentNetworkType ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <p className="text-xs text-muted-foreground cursor-help underline decoration-dotted">
+                                          {result.currentNetworkType}
+                                        </p>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className="max-w-[250px]">
+                                        <p className="font-medium">
+                                          {(t.numberTypes as any)?.[result.currentNetworkType] || result.currentNetworkType}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {(t.numberTypes as any)?.[`${result.currentNetworkType}Desc`] || ''}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : null}
                               </div>
                             </TableCell>
                             <TableCell>
@@ -993,7 +1017,17 @@ export default function Home() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <HealthScoreBadge score={result.healthScore || 0} size="sm" />
+                              <HealthScoreBadge 
+                                score={result.healthScore || 0} 
+                                size="sm" 
+                                details={{
+                                  validNumber: result.validNumber,
+                                  reachable: result.reachable,
+                                  ported: result.ported,
+                                  roaming: result.roaming,
+                                  currentNetworkType: result.currentNetworkType
+                                }}
+                              />
                             </TableCell>
                           </TableRow>
                         ))

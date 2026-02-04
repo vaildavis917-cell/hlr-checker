@@ -1,15 +1,24 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Heart, HeartCrack, HeartPulse } from "lucide-react";
+import { Heart, HeartCrack, HeartPulse, Check, X } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+interface HealthScoreDetails {
+  validNumber?: string | null;
+  reachable?: string | null;
+  ported?: string | null;
+  roaming?: string | null;
+  currentNetworkType?: string | null;
+}
 
 interface HealthScoreBadgeProps {
   score: number;
   showLabel?: boolean;
   size?: "sm" | "md" | "lg";
+  details?: HealthScoreDetails;
 }
 
-export default function HealthScoreBadge({ score, showLabel = false, size = "md" }: HealthScoreBadgeProps) {
+export default function HealthScoreBadge({ score, showLabel = false, size = "md", details }: HealthScoreBadgeProps) {
   const { t } = useLanguage();
   
   const getScoreColor = (score: number) => {
@@ -37,6 +46,67 @@ export default function HealthScoreBadge({ score, showLabel = false, size = "md"
 
   const textSize = size === "sm" ? "text-xs" : size === "lg" ? "text-base" : "text-sm";
 
+  // Calculate individual scores based on actual values
+  const calculateDetailedScores = () => {
+    if (!details) return null;
+    
+    const scores = [];
+    
+    // Validity (40 pts)
+    const isValid = details.validNumber === "valid";
+    scores.push({
+      label: t.health.validity,
+      maxPts: 40,
+      earned: isValid ? 40 : 0,
+      value: isValid ? t.health.yes : t.health.no,
+      positive: isValid
+    });
+    
+    // Reachability (25 pts)
+    const isReachable = details.reachable === "reachable";
+    scores.push({
+      label: t.health.reachability,
+      maxPts: 25,
+      earned: isReachable ? 25 : 0,
+      value: isReachable ? t.health.yes : t.health.no,
+      positive: isReachable
+    });
+    
+    // Porting status (15 pts) - not ported is better
+    const notPorted = details.ported === "assumed_not_ported" || details.ported === "not_ported";
+    scores.push({
+      label: t.health.portingStatus,
+      maxPts: 15,
+      earned: notPorted ? 15 : 0,
+      value: notPorted ? t.health.notPorted : t.health.ported,
+      positive: notPorted
+    });
+    
+    // Roaming status (10 pts) - not roaming is better
+    const notRoaming = details.roaming === "not_roaming";
+    scores.push({
+      label: t.health.roamingStatus,
+      maxPts: 10,
+      earned: notRoaming ? 10 : 0,
+      value: notRoaming ? t.health.notRoaming : t.health.roaming,
+      positive: notRoaming
+    });
+    
+    // Network type (10 pts) - mobile is best
+    const isMobile = details.currentNetworkType === "mobile";
+    scores.push({
+      label: t.health.networkType,
+      maxPts: 10,
+      earned: isMobile ? 10 : 0,
+      value: details.currentNetworkType || t.health.unknown,
+      positive: isMobile
+    });
+    
+    return scores;
+  };
+
+  const detailedScores = calculateDetailedScores();
+
   return (
     <TooltipProvider>
       <Tooltip>
@@ -50,19 +120,40 @@ export default function HealthScoreBadge({ score, showLabel = false, size = "md"
             {showLabel && <span className="ml-1">({getScoreLabel(score)})</span>}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent className="max-w-xs">
           <div className="text-sm">
             <p className="font-medium">{t.health.healthScore}: {score}/100</p>
             <p className="text-muted-foreground">{getScoreLabel(score)}</p>
             <div className="mt-2 text-xs space-y-1">
-              <p>{t.health.basedOn}:</p>
-              <ul className="list-disc list-inside">
-                <li>{t.health.validity} (40 {t.health.pts})</li>
-                <li>{t.health.reachability} (25 {t.health.pts})</li>
-                <li>{t.health.portingStatus} (15 {t.health.pts})</li>
-                <li>{t.health.roamingStatus} (10 {t.health.pts})</li>
-                <li>{t.health.networkType} (10 {t.health.pts})</li>
-              </ul>
+              {detailedScores ? (
+                <>
+                  <p className="font-medium mb-1">{t.health.breakdown}:</p>
+                  {detailedScores.map((item, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      {item.positive ? (
+                        <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <X className="h-3 w-3 text-red-500 flex-shrink-0" />
+                      )}
+                      <span className="flex-1">{item.label}: {item.value}</span>
+                      <span className={item.positive ? "text-green-600 font-medium" : "text-red-500"}>
+                        {item.positive ? `+${item.earned}` : `0/${item.maxPts}`}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <p>{t.health.basedOn}:</p>
+                  <ul className="list-disc list-inside">
+                    <li>{t.health.validity} (40 {t.health.pts})</li>
+                    <li>{t.health.reachability} (25 {t.health.pts})</li>
+                    <li>{t.health.portingStatus} (15 {t.health.pts})</li>
+                    <li>{t.health.roamingStatus} (10 {t.health.pts})</li>
+                    <li>{t.health.networkType} (10 {t.health.pts})</li>
+                  </ul>
+                </>
+              )}
             </div>
           </div>
         </TooltipContent>
