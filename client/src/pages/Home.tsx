@@ -814,7 +814,7 @@ export default function Home() {
                   </Select>
                   <ExportTemplatesDialog onSelectTemplate={(fields) => {
                     // Store selected fields for export
-                    console.log("Selected fields:", fields);
+                    // Selected fields stored for export
                     toast.info(`Шаблон с ${fields.length} полями выбран`);
                   }} />
                   <Button variant="outline" size="sm" onClick={handleExportCSV}>
