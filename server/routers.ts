@@ -1116,7 +1116,7 @@ const emailRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       // Check permission
-      const hasPermission = await userHasPermission(ctx.user.id, "hlr.batch");
+      const hasPermission = await userHasPermission(ctx.user.id, "email.batch");
       if (!hasPermission) {
         throw new TRPCError({ code: "FORBIDDEN", message: "No permission for batch email check" });
       }
@@ -1126,9 +1126,13 @@ const emailRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "API key not configured" });
       }
 
-      // Filter valid emails
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const validEmails = input.emails.filter(e => emailRegex.test(e.trim()));
+      // Filter valid emails - more permissive regex that accepts most valid email formats
+      // Allows: letters, numbers, dots, hyphens, underscores, plus signs before @
+      // Requires: @ symbol, domain with at least one dot
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
+      const validEmails = input.emails
+        .map(e => e.trim().toLowerCase())
+        .filter(e => e.length > 0 && emailRegex.test(e));
       if (validEmails.length === 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "No valid emails provided" });
       }
@@ -1544,11 +1548,11 @@ const emailRouter = router({
       const processedEmails = await getProcessedEmailsForBatch(input.batchId);
       const processedSet = new Set(processedEmails.map(e => e.toLowerCase()));
 
-      // Filter out already processed emails
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      // Filter out already processed emails - more permissive regex
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
       const remainingEmails = input.emails
-        .filter(e => emailRegex.test(e.trim()))
         .map(e => e.trim().toLowerCase())
+        .filter(e => e.length > 0 && emailRegex.test(e))
         .filter(e => !processedSet.has(e));
 
       if (remainingEmails.length === 0) {
@@ -2206,6 +2210,11 @@ export const appRouter = router({
           const phone = numbersToActuallyCheck[i];
           if (!phone) continue;
 
+          // Add delay between API calls to prevent rate limiting
+          if (i > 0) {
+            await sleep(150); // 150ms delay between calls
+          }
+
           const hlrResponse = await performHlrLookup(phone);
           processedCount++;
 
@@ -2579,6 +2588,11 @@ export const appRouter = router({
         for (let i = 0; i < numbersToCheck.length; i++) {
           const phone = numbersToCheck[i];
           if (!phone) continue;
+
+          // Add delay between API calls to prevent rate limiting
+          if (i > 0) {
+            await sleep(150);
+          }
 
           const hlrResponse = await performHlrLookup(phone);
           processedCount++;
