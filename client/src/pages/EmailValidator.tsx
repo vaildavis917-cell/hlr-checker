@@ -241,15 +241,13 @@ export default function EmailValidator() {
       return;
     }
 
-    if (!batchName.trim()) {
-      toast.error(t.email?.enterBatchName || "Enter batch name");
-      return;
-    }
+    // Auto-generate name if not provided
+    const finalName = batchName.trim() || "";
 
     setIsProcessing(true);
     setProgress(0);
     startBatchMutation.mutate({
-      name: batchName.trim(),
+      name: finalName,
       emails,
     });
   };
@@ -785,7 +783,7 @@ export default function EmailValidator() {
                 ) : (
                   <Button
                     onClick={handleBatchStart}
-                    disabled={isProcessing || !batchEmails.trim() || !batchName.trim()}
+                    disabled={isProcessing || !batchEmails.trim()}
                     className="w-full"
                   >
                     {isProcessing ? (

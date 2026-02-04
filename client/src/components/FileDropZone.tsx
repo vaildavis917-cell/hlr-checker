@@ -31,51 +31,48 @@ export default function FileDropZone({ onFileLoaded, disabled, className }: File
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json<any>(firstSheet, { header: 1 });
         
-        const numbers: string[] = [];
-        data.forEach((row: any[], index: number) => {
-          // Skip header row if it contains text like "phone", "номер", etc.
-          if (index === 0) {
-            const firstCell = String(row[0] || '').toLowerCase();
-            if (firstCell.includes('phone') || firstCell.includes('номер') || firstCell.includes('телефон')) {
-              return;
+        const items: string[] = [];
+        data.forEach((row: any[]) => {
+          // Check all cells in the row for emails or phone numbers
+          row.forEach((cell) => {
+            if (cell !== undefined && cell !== null) {
+              const cellStr = String(cell).trim().replace(/['"]/g, '');
+              // Check if it's an email (contains @)
+              if (cellStr.includes('@')) {
+                items.push(cellStr);
+              }
+              // Check if it's a phone number (contains digits, not a header)
+              else if (cellStr && /^[+\d][\d\s\-()]+$/.test(cellStr)) {
+                items.push(cellStr);
+              }
             }
-          }
-          
-          // Get first column value
-          if (row[0] !== undefined && row[0] !== null) {
-            const num = String(row[0]).trim().replace(/['"]/g, '');
-            if (num && /\d/.test(num)) {
-              numbers.push(num);
-            }
-          }
+          });
         });
         
-        onFileLoaded(numbers, file.name);
+        onFileLoaded(items, file.name);
       } else {
         // Parse CSV/TXT file
         const text = await file.text();
         const lines = text.split(/\r?\n/);
-        const numbers: string[] = [];
+        const items: string[] = [];
         
-        lines.forEach((line, index) => {
-          // Skip header row
-          if (index === 0) {
-            const lower = line.toLowerCase();
-            if (lower.includes('phone') || lower.includes('номер') || lower.includes('телефон')) {
-              return;
-            }
-          }
-          
+        lines.forEach((line) => {
+          // Split by common delimiters
           const parts = line.split(/[,;\t]/);
-          if (parts[0]) {
-            const num = parts[0].trim().replace(/['"]/g, '');
-            if (num && /\d/.test(num)) {
-              numbers.push(num);
+          parts.forEach((part) => {
+            const item = part.trim().replace(/['"]/g, '');
+            // Check if it's an email (contains @)
+            if (item.includes('@')) {
+              items.push(item);
             }
-          }
+            // Check if it's a phone number (contains digits, not a header)
+            else if (item && /^[+\d][\d\s\-()]+$/.test(item)) {
+              items.push(item);
+            }
+          });
         });
         
-        onFileLoaded(numbers, file.name);
+        onFileLoaded(items, file.name);
       }
     } catch (error) {
       console.error('Error parsing file:', error);

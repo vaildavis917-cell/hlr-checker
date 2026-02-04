@@ -91,6 +91,7 @@ import {
   initializeSystemRoles,
   getIncompleteEmailBatches,
   getProcessedEmailsForBatch,
+  getEmailBatchCountByUser,
 } from "./db";
 import { sendTelegramMessage, notifyNewAccessRequest, testTelegramConnection } from "./telegram";
 import { login, createSession } from "./auth";
@@ -1111,7 +1112,7 @@ const emailRouter = router({
   // Start batch email verification
   startBatch: protectedProcedure
     .input(z.object({
-      name: z.string().min(1),
+      name: z.string().optional().default(""),
       emails: z.array(z.string()).min(1).max(10000),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1143,10 +1144,17 @@ const emailRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Email limit exceeded" });
       }
 
+      // Auto-generate batch name if not provided
+      let batchName = input.name?.trim() || "";
+      if (!batchName) {
+        const batchCount = await getEmailBatchCountByUser(ctx.user.id);
+        batchName = `Проверка ${batchCount + 1}`;
+      }
+
       // Create batch
       const batchId = await createEmailBatch({
         userId: ctx.user.id,
-        name: input.name,
+        name: batchName,
         totalEmails: validEmails.length,
       });
 

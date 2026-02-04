@@ -1416,6 +1416,17 @@ export async function getEmailBatchesByUser(userId: number): Promise<EmailBatch[
     .orderBy(desc(emailBatches.createdAt));
 }
 
+export async function getEmailBatchCountByUser(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.select({ count: sql<number>`count(*)` })
+    .from(emailBatches)
+    .where(eq(emailBatches.userId, userId));
+  
+  return result[0]?.count || 0;
+}
+
 export async function getEmailBatchById(batchId: number): Promise<EmailBatch | null> {
   const db = await getDb();
   if (!db) return null;
