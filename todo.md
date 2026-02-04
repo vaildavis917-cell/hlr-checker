@@ -501,3 +501,16 @@
 - [x] HLR проверка останавливается - добавлена задержка 150ms между API вызовами
 - [x] Email permission ошибка - исправлено hlr.batch на email.batch
 - [x] Добавлена задержка в resumeBatchWithNumbers для HLR
+
+
+## Bug Fixes - Full Audit (2026-02-04)
+
+### Критические баги (неправильные permissions в email router):
+- [x] Email checkSingle - использует hlr.single вместо email.single
+- [x] Email listBatches - использует hlr.history вместо email.history
+- [x] Email deleteBatch - использует hlr.delete вместо email.delete
+- [x] Email exportXlsx - использует hlr.export вместо email.export
+- [x] Email exportWithFields - использует hlr.export вместо email.export
+
+### Серьёзные баги (HLR resume):
+- [x] HLR resumeBatch - теперь полноценно обрабатывает оставшиеся номера если переданы phoneNumbers

@@ -1033,7 +1033,7 @@ const emailRouter = router({
     .input(z.object({ email: z.string().email() }))
     .mutation(async ({ ctx, input }) => {
       // Check permission
-      const hasPermission = await userHasPermission(ctx.user.id, "hlr.single");
+      const hasPermission = await userHasPermission(ctx.user.id, "email.single");
       if (!hasPermission) {
         throw new TRPCError({ code: "FORBIDDEN", message: "No permission for email check" });
       }
@@ -1285,9 +1285,9 @@ const emailRouter = router({
 
   // Get user's email batches
   listBatches: protectedProcedure.query(async ({ ctx }) => {
-    const hasPermission = await userHasPermission(ctx.user.id, "hlr.history");
+    const hasPermission = await userHasPermission(ctx.user.id, "email.history");
     if (!hasPermission) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "No permission to view history" });
+      throw new TRPCError({ code: "FORBIDDEN", message: "No permission to view email history" });
     }
     return await getEmailBatchesByUser(ctx.user.id);
   }),
@@ -1321,9 +1321,9 @@ const emailRouter = router({
   deleteBatch: protectedProcedure
     .input(z.object({ batchId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const hasPermission = await userHasPermission(ctx.user.id, "hlr.delete");
+      const hasPermission = await userHasPermission(ctx.user.id, "email.delete");
       if (!hasPermission) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to delete" });
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to delete email batches" });
       }
       const batch = await getEmailBatchById(input.batchId);
       if (!batch) {
@@ -1340,9 +1340,9 @@ const emailRouter = router({
   exportXlsx: protectedProcedure
     .input(z.object({ batchId: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const hasPermission = await userHasPermission(ctx.user.id, "hlr.export");
+      const hasPermission = await userHasPermission(ctx.user.id, "email.export");
       if (!hasPermission) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export" });
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export email results" });
       }
       const batch = await getEmailBatchById(input.batchId);
       if (!batch) {
@@ -1397,9 +1397,9 @@ const emailRouter = router({
       fields: z.array(z.string()),
     }))
     .mutation(async ({ ctx, input }) => {
-      const hasPermission = await userHasPermission(ctx.user.id, "hlr.export");
+      const hasPermission = await userHasPermission(ctx.user.id, "email.export");
       if (!hasPermission) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export" });
+        throw new TRPCError({ code: "FORBIDDEN", message: "No permission to export email results" });
       }
       const batch = await getEmailBatchById(input.batchId);
       if (!batch) {
@@ -2513,27 +2513,142 @@ export const appRouter = router({
             message: "All numbers already checked",
             alreadyChecked: alreadyChecked,
             remaining: 0,
+            needsPhoneNumbers: false,
           };
         }
         
-        // For resuming, we need to re-check numbers that weren't processed
-        // Since we don't store the original input numbers, we'll mark the batch as completed
-        // and inform the user that partial results are available
-        // In a production system, you would store the original phone numbers list
+        // If phone numbers provided, process remaining ones
+        if (input.phoneNumbers && input.phoneNumbers.length > 0) {
+          // Filter out already checked numbers
+          const numbersToCheck = input.phoneNumbers.filter(n => !checkedNumbers.has(n));
+          
+          if (numbersToCheck.length === 0) {
+            await updateHlrBatch(input.batchId, {
+              status: "completed",
+              completedAt: new Date(),
+            });
+            return { 
+              batchId: input.batchId, 
+              resumed: false, 
+              message: "All provided numbers already checked",
+              alreadyChecked: alreadyChecked,
+              remaining: 0,
+              needsPhoneNumbers: false,
+            };
+          }
+          
+          // Check limits for remaining numbers
+          const limitsCheck = await checkUserLimits(ctx.user.id, numbersToCheck.length);
+          if (!limitsCheck.allowed) {
+            throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
+          }
+          
+          // Process remaining numbers
+          let validCount = batch.validNumbers || 0;
+          let invalidCount = batch.invalidNumbers || 0;
+          let processedCount = batch.processedNumbers || 0;
+          
+          for (let i = 0; i < numbersToCheck.length; i++) {
+            const phone = numbersToCheck[i];
+            if (!phone) continue;
+
+            // Add delay between API calls to prevent rate limiting
+            if (i > 0) {
+              await sleep(150);
+            }
+
+            const hlrResponse = await performHlrLookup(phone);
+            processedCount++;
+
+            let resultData: InsertHlrResult;
+
+            if ("error" in hlrResponse) {
+              resultData = {
+                batchId: input.batchId,
+                phoneNumber: phone,
+                status: "error",
+                errorMessage: hlrResponse.error,
+              };
+              invalidCount++;
+            } else {
+              const invalidGsmCodes = ["1", "5", "9", "12"];
+              const gsmCode = hlrResponse.gsm_code?.toString();
+              const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
+              const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
+              const isValid = finalValidNumber === "valid";
+              if (isValid) validCount++;
+              else invalidCount++;
+
+              resultData = {
+                batchId: input.batchId,
+                phoneNumber: phone,
+                internationalFormat: hlrResponse.international_format_number,
+                nationalFormat: hlrResponse.national_format_number,
+                countryCode: hlrResponse.country_code,
+                countryName: hlrResponse.country_name,
+                countryPrefix: hlrResponse.country_prefix,
+                currentCarrierName: hlrResponse.current_carrier?.name,
+                currentCarrierCode: hlrResponse.current_carrier?.network_code,
+                currentCarrierCountry: hlrResponse.current_carrier?.country,
+                currentNetworkType: hlrResponse.current_carrier?.network_type,
+                originalCarrierName: hlrResponse.original_carrier?.name,
+                originalCarrierCode: hlrResponse.original_carrier?.network_code,
+                validNumber: finalValidNumber,
+                reachable: hlrResponse.reachable,
+                ported: hlrResponse.ported,
+                roaming: hlrResponse.roaming,
+                gsmCode: hlrResponse.gsm_code,
+                gsmMessage: hlrResponse.gsm_message,
+                status: "success",
+                rawResponse: hlrResponse as unknown as Record<string, unknown>,
+              };
+            }
+
+            // Save result immediately
+            await createHlrResult(resultData);
+
+            // Update progress every 10 numbers
+            if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
+              await updateHlrBatch(input.batchId, {
+                processedNumbers: processedCount,
+                validNumbers: validCount,
+                invalidNumbers: invalidCount,
+              });
+            }
+          }
+
+          // Mark batch as completed
+          await updateHlrBatch(input.batchId, {
+            status: "completed",
+            processedNumbers: processedCount,
+            validNumbers: validCount,
+            invalidNumbers: invalidCount,
+            completedAt: new Date(),
+          });
+          
+          await incrementUserChecks(ctx.user.id, numbersToCheck.length);
+          await logAction({ userId: ctx.user.id, action: "resume_batch", details: `Resumed batch ${input.batchId}, checked ${numbersToCheck.length} remaining numbers` });
+
+          return { 
+            batchId: input.batchId, 
+            resumed: true,
+            alreadyChecked: alreadyChecked,
+            newlyChecked: numbersToCheck.length,
+            totalProcessed: processedCount,
+            needsPhoneNumbers: false,
+          };
+        }
         
-        // Mark batch as completed with partial results
-        await updateHlrBatch(input.batchId, {
-          status: "completed",
-          completedAt: new Date(),
-        });
-        
+        // No phone numbers provided - return info about what's needed
         return { 
           batchId: input.batchId, 
-          resumed: true,
+          resumed: false,
           alreadyChecked: alreadyChecked,
           newlyChecked: 0,
           totalProcessed: alreadyChecked,
-          message: `Batch marked as completed. ${alreadyChecked} numbers were successfully checked. ${remaining} numbers were not processed due to interruption.`,
+          remaining: remaining,
+          needsPhoneNumbers: true,
+          message: `Batch has ${remaining} unchecked numbers. Please provide the original phone numbers list to resume.`,
         };
       }),
 
