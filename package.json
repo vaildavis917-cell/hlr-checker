@@ -79,6 +79,7 @@
     "ua-parser-js": "^2.0.8",
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
+    "ws": "^8.19.0",
     "xlsx": "^0.18.5",
     "zod": "^4.1.12"
   },
@@ -93,6 +94,7 @@
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "@types/ua-parser-js": "^0.7.39",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.4",
     "add": "^2.0.6",
     "autoprefixer": "^10.4.20",

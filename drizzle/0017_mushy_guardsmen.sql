@@ -1,0 +1,1 @@
+ALTER TABLE `hlr_batches` ADD `originalNumbers` json;

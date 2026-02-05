@@ -53,6 +53,7 @@ import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
 import FileDropZone from "@/components/FileDropZone";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSearch } from "wouter";
+import { useBatchProgress } from "@/hooks/useWebSocket";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
@@ -100,6 +101,9 @@ export default function Home() {
   // Auth
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  
+  // WebSocket for real-time batch progress
+  const batchProgress = useBatchProgress(isProcessing ? currentBatchId : null, user?.id);
   
   // Single check state
   const [singlePhone, setSinglePhone] = useState("");
@@ -775,6 +779,26 @@ export default function Home() {
                   </>
                 )}
               </Button>
+              
+              {/* Real-time progress bar */}
+              {isProcessing && batchProgress && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Обработано: {batchProgress.processed} / {batchProgress.total}</span>
+                    <span>{batchProgress.percentage}%</span>
+                  </div>
+                  <Progress value={batchProgress.percentage} className="h-2" />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span className="text-green-500">Валидных: {batchProgress.valid || 0}</span>
+                    <span className="text-red-500">Невалидных: {batchProgress.invalid || 0}</span>
+                  </div>
+                  {batchProgress.currentItem && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      Текущий: {batchProgress.currentItem}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

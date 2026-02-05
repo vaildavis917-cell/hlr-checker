@@ -1,6 +1,7 @@
 import { COOKIE_NAME, TWELVE_HOURS_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { registerActiveBatch, updateBatchProgress, unregisterBatch, isShutdownInProgress } from "./_core/index";
+import { broadcastBatchProgress } from "./_core/websocket";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
@@ -1156,6 +1157,7 @@ const emailRouter = router({
         userId: ctx.user.id,
         name: batchName,
         totalEmails: validEmails.length,
+        originalEmails: validEmails, // Save for auto-resume
       });
 
       // Log batch start
@@ -1261,7 +1263,26 @@ const emailRouter = router({
 
         processed++;
         await updateEmailBatchProgress(batchId, processed, valid, invalid, risky, unknown);
+        
+        // Broadcast progress via WebSocket
+        broadcastBatchProgress(batchId, {
+          processed,
+          total: validEmails.length,
+          valid,
+          invalid,
+          status: "processing",
+          currentItem: email,
+        });
       }
+
+      // Broadcast completion via WebSocket
+      broadcastBatchProgress(batchId, {
+        processed: validEmails.length,
+        total: validEmails.length,
+        valid,
+        invalid,
+        status: "completed",
+      });
 
       await completeEmailBatch(batchId);
       
@@ -1528,7 +1549,7 @@ const emailRouter = router({
   resumeBatch: protectedProcedure
     .input(z.object({
       batchId: z.number(),
-      emails: z.array(z.string()).min(1),
+      emails: z.array(z.string()).optional(), // Now optional - will use saved originalEmails if not provided
     }))
     .mutation(async ({ ctx, input }) => {
       const hasPermission = await userHasPermission(ctx.user.id, "email.batch");
@@ -1556,9 +1577,18 @@ const emailRouter = router({
       const processedEmails = await getProcessedEmailsForBatch(input.batchId);
       const processedSet = new Set(processedEmails.map(e => e.toLowerCase()));
 
+      // Use provided emails or saved originalEmails
+      const emailsToUse = input.emails && input.emails.length > 0 
+        ? input.emails 
+        : (batch.originalEmails || []);
+      
+      if (emailsToUse.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No emails to process. Please provide email list." });
+      }
+
       // Filter out already processed emails - more permissive regex
       const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i;
-      const remainingEmails = input.emails
+      const remainingEmails = emailsToUse
         .map(e => e.trim().toLowerCase())
         .filter(e => e.length > 0 && emailRegex.test(e))
         .filter(e => !processedSet.has(e));
@@ -1678,7 +1708,26 @@ const emailRouter = router({
 
         processed++;
         await updateEmailBatchProgress(input.batchId, processed, valid, invalid, risky, unknown);
+        
+        // Broadcast progress via WebSocket
+        broadcastBatchProgress(input.batchId, {
+          processed,
+          total: remainingEmails.length,
+          valid,
+          invalid,
+          status: "processing",
+          currentItem: email,
+        });
       }
+
+      // Broadcast completion via WebSocket
+      broadcastBatchProgress(input.batchId, {
+        processed: remainingEmails.length,
+        total: remainingEmails.length,
+        valid,
+        invalid,
+        status: "completed",
+      });
 
       await completeEmailBatch(input.batchId);
 
@@ -2138,6 +2187,7 @@ export const appRouter = router({
           validNumbers: 0,
           invalidNumbers: 0,
           status: "processing",
+          originalNumbers: numbersToCheck, // Save for auto-resume
         });
         
         // Register batch for graceful shutdown tracking
@@ -2286,8 +2336,27 @@ export const appRouter = router({
             });
             // Update graceful shutdown tracker
             updateBatchProgress(batchId, processedCount);
+            
+            // Broadcast progress via WebSocket
+            broadcastBatchProgress(batchId, {
+              processed: processedCount,
+              total: numbersToCheck.length,
+              valid: validCount,
+              invalid: invalidCount,
+              status: "processing",
+              currentItem: numbersToActuallyCheck[i],
+            });
           }
         }
+
+        // Broadcast completion via WebSocket
+        broadcastBatchProgress(batchId, {
+          processed: numbersToCheck.length,
+          total: numbersToCheck.length,
+          valid: validCount,
+          invalid: invalidCount,
+          status: "completed",
+        });
 
         // Mark batch as completed
         await updateHlrBatch(batchId, {
@@ -2647,7 +2716,148 @@ export const appRouter = router({
           };
         }
         
-        // No phone numbers provided - return info about what's needed
+        // No phone numbers provided - try to use saved originalNumbers
+        if (batch.originalNumbers && batch.originalNumbers.length > 0) {
+          // Filter out already checked numbers
+          const numbersToCheck = batch.originalNumbers.filter(n => !checkedNumbers.has(n));
+          
+          if (numbersToCheck.length === 0) {
+            await updateHlrBatch(input.batchId, {
+              status: "completed",
+              completedAt: new Date(),
+            });
+            return { 
+              batchId: input.batchId, 
+              resumed: false, 
+              message: "All numbers already checked",
+              alreadyChecked: alreadyChecked,
+              remaining: 0,
+              needsPhoneNumbers: false,
+            };
+          }
+          
+          // Check limits for remaining numbers
+          const limitsCheck = await checkUserLimits(ctx.user.id, numbersToCheck.length);
+          if (!limitsCheck.allowed) {
+            throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
+          }
+          
+          // Process remaining numbers using saved originalNumbers
+          let validCount = batch.validNumbers || 0;
+          let invalidCount = batch.invalidNumbers || 0;
+          let processedCount = batch.processedNumbers || 0;
+          
+          for (let i = 0; i < numbersToCheck.length; i++) {
+            const phone = numbersToCheck[i];
+            if (!phone) continue;
+
+            // Add delay between API calls to prevent rate limiting
+            if (i > 0) {
+              await sleep(150);
+            }
+
+            const hlrResponse = await performHlrLookup(phone);
+            processedCount++;
+
+            let resultData: InsertHlrResult;
+
+            if ("error" in hlrResponse) {
+              resultData = {
+                batchId: input.batchId,
+                phoneNumber: phone,
+                status: "error",
+                errorMessage: hlrResponse.error,
+              };
+              invalidCount++;
+            } else {
+              const invalidGsmCodes = ["1", "5", "9", "12"];
+              const gsmCode = hlrResponse.gsm_code?.toString();
+              const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
+              const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
+              const isValid = finalValidNumber === "valid";
+              if (isValid) validCount++;
+              else invalidCount++;
+
+              resultData = {
+                batchId: input.batchId,
+                phoneNumber: phone,
+                internationalFormat: hlrResponse.international_format_number,
+                nationalFormat: hlrResponse.national_format_number,
+                countryCode: hlrResponse.country_code,
+                countryName: hlrResponse.country_name,
+                countryPrefix: hlrResponse.country_prefix,
+                currentCarrierName: hlrResponse.current_carrier?.name,
+                currentCarrierCode: hlrResponse.current_carrier?.network_code,
+                currentCarrierCountry: hlrResponse.current_carrier?.country,
+                currentNetworkType: hlrResponse.current_carrier?.network_type,
+                originalCarrierName: hlrResponse.original_carrier?.name,
+                originalCarrierCode: hlrResponse.original_carrier?.network_code,
+                validNumber: finalValidNumber,
+                reachable: hlrResponse.reachable,
+                ported: hlrResponse.ported,
+                roaming: hlrResponse.roaming,
+                gsmCode: hlrResponse.gsm_code,
+                gsmMessage: hlrResponse.gsm_message,
+                status: "success",
+                rawResponse: hlrResponse as unknown as Record<string, unknown>,
+              };
+            }
+
+            await createHlrResult(resultData);
+
+            // Update progress every 10 numbers
+            if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
+              await updateHlrBatch(input.batchId, {
+                processedNumbers: processedCount,
+                validNumbers: validCount,
+                invalidNumbers: invalidCount,
+              });
+              
+              // Broadcast progress via WebSocket
+              broadcastBatchProgress(input.batchId, {
+                processed: processedCount,
+                total: batch.totalNumbers || numbersToCheck.length,
+                valid: validCount,
+                invalid: invalidCount,
+                status: "processing",
+                currentItem: phone,
+              });
+            }
+          }
+
+          // Broadcast completion
+          broadcastBatchProgress(input.batchId, {
+            processed: processedCount,
+            total: batch.totalNumbers || numbersToCheck.length,
+            valid: validCount,
+            invalid: invalidCount,
+            status: "completed",
+          });
+
+          // Mark batch as completed
+          await updateHlrBatch(input.batchId, {
+            status: "completed",
+            processedNumbers: processedCount,
+            validNumbers: validCount,
+            invalidNumbers: invalidCount,
+            completedAt: new Date(),
+          });
+          
+          await incrementUserChecks(ctx.user.id, numbersToCheck.length);
+          await logAction({ userId: ctx.user.id, action: "auto_resume_batch", details: `Auto-resumed batch ${input.batchId} using saved numbers, checked ${numbersToCheck.length} remaining numbers` });
+
+          return { 
+            batchId: input.batchId, 
+            resumed: true,
+            alreadyChecked: alreadyChecked,
+            newlyChecked: numbersToCheck.length,
+            totalProcessed: processedCount,
+            needsPhoneNumbers: false,
+            autoResumed: true,
+          };
+        }
+        
+        // No saved originalNumbers - return info about what's needed
         return { 
           batchId: input.batchId, 
           resumed: false,

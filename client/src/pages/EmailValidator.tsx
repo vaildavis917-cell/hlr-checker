@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import FileDropZone from "@/components/FileDropZone";
 import { useSearch, useLocation } from "wouter";
+import { useBatchProgress } from "@/hooks/useWebSocket";
 import * as XLSX from "xlsx";
 import {
   Table,
@@ -69,6 +70,9 @@ export default function EmailValidator() {
   
   // Current batch ID from URL
   const [currentBatchId, setCurrentBatchId] = useState<number | null>(null);
+  
+  // WebSocket for real-time batch progress
+  const batchProgress = useBatchProgress(isProcessing ? currentBatchId : null, user?.id);
   const [activeTab, setActiveTab] = useState("single");
   const [resumeBatchId, setResumeBatchId] = useState<number | null>(null);
   const [isResuming, setIsResuming] = useState(false);
@@ -753,12 +757,30 @@ export default function EmailValidator() {
 
                 {(isProcessing || isResuming) && (
                   <div className="space-y-2">
-                    <Progress value={progress} />
-                    <p className="text-sm text-center text-muted-foreground">
-                      {isResuming 
-                        ? (language === "ru" ? "Возобновление..." : language === "uk" ? "Відновлення..." : "Resuming...")
-                        : (t.email?.processing || "Processing...")}
-                    </p>
+                    <Progress value={batchProgress?.percentage || progress} />
+                    {batchProgress ? (
+                      <>
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Обработано: {batchProgress.processed} / {batchProgress.total}</span>
+                          <span>{batchProgress.percentage}%</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span className="text-green-500">Валидных: {batchProgress.valid || 0}</span>
+                          <span className="text-red-500">Невалидных: {batchProgress.invalid || 0}</span>
+                        </div>
+                        {batchProgress.currentItem && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            Текущий: {batchProgress.currentItem}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-center text-muted-foreground">
+                        {isResuming 
+                          ? (language === "ru" ? "Возобновление..." : language === "uk" ? "Відновлення..." : "Resuming...")
+                          : (t.email?.processing || "Processing...")}
+                      </p>
+                    )}
                   </div>
                 )}
 

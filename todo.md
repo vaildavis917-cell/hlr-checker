@@ -521,3 +521,20 @@
 - [x] При загрузке файла показывает 8 email вместо 14 - счётчик работает правильно (14)
 
 - [x] Сделать поле "Название проверки" необязательным в Email Validator (автогенерация "Проверка 1, 2, 3...")
+
+
+## Real-time Progress & Auto-Resume (2026-02-05)
+
+### WebSocket для real-time прогресса
+- [x] Установить ws библиотеку для WebSocket
+- [x] Создать WebSocket сервер на backend (server/_core/websocket.ts)
+- [x] Отправлять прогресс batch обработки через WebSocket (broadcastBatchProgress)
+- [x] Интегрировать WebSocket клиент в frontend (hooks/useWebSocket.ts)
+- [x] Показывать real-time прогресс в UI (HLR и Email) - Home.tsx, EmailValidator.tsx
+
+### Автоматический resume с сохранением номеров
+- [x] Добавить поле originalNumbers в таблицу hlr_batches (JSON)
+- [x] Добавить поле originalEmails в таблицу email_batches (JSON)
+- [x] Сохранять исходный список при создании batch
+- [x] Реализовать auto-resume без повторной загрузки файла (HLR и Email)
+- [x] Обновить backend resumeBatch для использования сохранённых номеров

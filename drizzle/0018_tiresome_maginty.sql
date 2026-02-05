@@ -1,0 +1,1 @@
+ALTER TABLE `email_batches` ADD `originalEmails` json;

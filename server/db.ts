@@ -1353,6 +1353,7 @@ export async function createEmailBatch(data: {
   userId: number;
   name: string;
   totalEmails: number;
+  originalEmails?: string[];
 }): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -1367,6 +1368,7 @@ export async function createEmailBatch(data: {
     riskyEmails: 0,
     unknownEmails: 0,
     status: "processing",
+    originalEmails: data.originalEmails,
   });
   
   return result[0].insertId;

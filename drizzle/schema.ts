@@ -173,6 +173,8 @@ export const hlrBatches = mysqlTable("hlr_batches", {
   status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
+  /** Original phone numbers for auto-resume (JSON array) */
+  originalNumbers: json("originalNumbers").$type<string[]>(),
 });
 
 export type HlrBatch = typeof hlrBatches.$inferSelect;
@@ -401,6 +403,8 @@ export const emailBatches = mysqlTable("email_batches", {
   status: varchar("status", { length: 32 }).notNull().default("pending"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
+  /** Original emails for auto-resume (JSON array) */
+  originalEmails: json("originalEmails").$type<string[]>(),
 });
 export type EmailBatch = typeof emailBatches.$inferSelect;
 export type InsertEmailBatch = typeof emailBatches.$inferInsert;

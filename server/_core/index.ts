@@ -11,6 +11,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { initWebSocket, closeAllConnections } from "./websocket";
 
 // Global state for graceful shutdown
 let isShuttingDown = false;
@@ -135,6 +136,9 @@ async function gracefulShutdown(signal: string) {
     console.log(`[Shutdown] Timeout reached, ${activeRequests.size} requests will be terminated`);
   }
   
+  // Close WebSocket connections
+  closeAllConnections();
+  
   console.log("[Shutdown] Graceful shutdown complete");
   process.exit(0);
 }
@@ -208,6 +212,9 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  // Initialize WebSocket server
+  initWebSocket(server);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
