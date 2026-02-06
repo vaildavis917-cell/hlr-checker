@@ -538,3 +538,5 @@
 - [x] Сохранять исходный список при создании batch
 - [x] Реализовать auto-resume без повторной загрузки файла (HLR и Email)
 - [x] Обновить backend resumeBatch для использования сохранённых номеров
+
+- [x] Fix Vite WebSocket HMR connection error through Manus proxy (добавлен hmr: { clientPort: 443, protocol: 'wss' })
