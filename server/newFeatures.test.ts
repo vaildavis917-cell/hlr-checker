@@ -71,8 +71,8 @@ describe("Health Score Calculation", () => {
     } as HlrResult;
 
     const score = calculateHealthScore(result);
-    // 40 (valid) + 10 (unknown reachable) + 10 (ported) + 5 (roaming) + 10 (mobile) = 75
-    expect(score).toBe(75);
+    // 40 (valid) + 0 (unknown reachable) + 10 (ported) + 5 (roaming) + 10 (mobile) = 65
+    expect(score).toBe(65);
   });
 
   it("should handle batch health score calculation", () => {

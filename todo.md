@@ -552,3 +552,7 @@
 - [x] Add "paused" status to hlr_batches enum
 - [x] User can resume paused batches from Home page
 - [x] Status filter includes "paused" in admin Dashboard
+
+## Bug Fixes
+- [x] Fix: Page constantly auto-refreshes (WebSocket/Vite HMR conflict + tsx watch drizzle migration loop)
+- [x] Fix: When validity is not confirmed (valid_number != "valid"), status should show "Невалид" (invalid) instead of "Неизвестно" (unknown)

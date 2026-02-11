@@ -1,5 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { Server } from "http";
+import { IncomingMessage } from "http";
+import { Duplex } from "stream";
 
 // Store connected clients by userId
 const clients = new Map<number, Set<WebSocket>>();
@@ -10,7 +12,20 @@ const batchSubscribers = new Map<number, Set<WebSocket>>();
 let wss: WebSocketServer | null = null;
 
 export function initWebSocket(server: Server) {
-  wss = new WebSocketServer({ server, path: "/ws" });
+  // Create WebSocket server in noServer mode to avoid conflicts with Vite HMR
+  wss = new WebSocketServer({ noServer: true });
+
+  // Only handle upgrade requests for /ws path
+  server.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+    const url = new URL(request.url || "", `http://${request.headers.host}`);
+    
+    if (url.pathname === "/ws") {
+      wss!.handleUpgrade(request, socket, head, (ws) => {
+        wss!.emit("connection", ws, request);
+      });
+    }
+    // Don't handle other paths - let Vite HMR handle them
+  });
 
   wss.on("connection", (ws: WebSocket) => {
     let userId: number | null = null;
@@ -87,7 +102,7 @@ export function initWebSocket(server: Server) {
     });
   });
 
-  console.log("[WebSocket] Server initialized on /ws");
+  console.log("[WebSocket] Server initialized on /ws (noServer mode)");
 }
 
 // Send progress update to all subscribers of a batch

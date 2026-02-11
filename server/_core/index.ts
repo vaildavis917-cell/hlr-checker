@@ -199,6 +199,9 @@ async function startServer() {
     })
   );
   
+  // Initialize WebSocket server BEFORE Vite to get first priority on /ws upgrade
+  initWebSocket(server);
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -212,9 +215,6 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
-
-  // Initialize WebSocket server
-  initWebSocket(server);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

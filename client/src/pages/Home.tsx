@@ -450,9 +450,11 @@ export default function Home() {
     
     let filtered = [...resultsData];
     
-    // Apply filters
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(r => r.validNumber === statusFilter);
+    // Apply filters (anything not "valid" is treated as invalid)
+    if (statusFilter === "valid") {
+      filtered = filtered.filter(r => r.validNumber === "valid");
+    } else if (statusFilter === "invalid") {
+      filtered = filtered.filter(r => r.validNumber !== "valid");
     }
     if (countryFilter !== "all") {
       filtered = filtered.filter(r => r.countryName === countryFilter);
@@ -494,14 +496,11 @@ export default function Home() {
 
   // Get status badge
   const getStatusBadge = (validNumber: string | null) => {
-    switch (validNumber) {
-      case "valid":
-        return <Badge className="bg-success text-success-foreground"><CheckCircle2 className="w-3 h-3 mr-1" />{t.home.statusValid}</Badge>;
-      case "invalid":
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />{t.home.statusInvalid}</Badge>;
-      default:
-        return <Badge variant="secondary"><AlertCircle className="w-3 h-3 mr-1" />{t.home.statusUnknown}</Badge>;
+    if (validNumber === "valid") {
+      return <Badge className="bg-success text-success-foreground"><CheckCircle2 className="w-3 h-3 mr-1" />{t.home.statusValid}</Badge>;
     }
+    // Anything not "valid" is treated as invalid
+    return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />{t.home.statusInvalid}</Badge>;
   };
 
   const phoneCount = parsePhoneNumbers(phoneInput).length;

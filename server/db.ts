@@ -837,18 +837,14 @@ export async function getDefaultExportTemplate(userId: number): Promise<ExportTe
 export function calculateHealthScore(result: HlrResult): number {
   let score = 0;
   
-  // Validity (40 points)
+  // Validity (40 points) - anything not "valid" is treated as invalid (0 points)
   if (result.validNumber === "valid") {
     score += 40;
-  } else if (result.validNumber === "unknown") {
-    score += 20;
   }
   
   // Reachability (25 points)
   if (result.reachable === "reachable") {
     score += 25;
-  } else if (result.reachable === "unknown") {
-    score += 10;
   }
   
   // Ported status (15 points) - not ported is better for deliverability

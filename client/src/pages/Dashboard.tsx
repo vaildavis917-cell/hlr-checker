@@ -669,10 +669,9 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
     return <div className="text-center py-8 text-muted-foreground">Нет результатов</div>;
   }
 
-  // Calculate stats - validity from API
+  // Calculate stats - validity from API (anything not "valid" is invalid)
   const validCount = data.results.filter((r: any) => r.validNumber === "valid").length;
-  const invalidCount = data.results.filter((r: any) => r.validNumber === "invalid").length;
-  const unknownCount = data.results.length - validCount - invalidCount;
+  const invalidCount = data.results.length - validCount;
   
   // Calculate quality stats based on Health Score
   const highQuality = data.results.filter((r: any) => (r.healthScore || 0) >= 60).length;
@@ -702,10 +701,9 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
         bValue = b.healthScore || 0;
         break;
       case "status":
-        // Sort order: valid > unknown > invalid
-        const statusOrder: Record<string, number> = { valid: 3, unknown: 2, invalid: 1 };
-        aValue = statusOrder[a.validNumber] || 0;
-        bValue = statusOrder[b.validNumber] || 0;
+        // Sort order: valid > invalid (anything not valid is invalid)
+        aValue = a.validNumber === "valid" ? 2 : 1;
+        bValue = b.validNumber === "valid" ? 2 : 1;
         break;
       case "operator":
         aValue = (a.currentCarrierName || "").toLowerCase();
@@ -773,13 +771,7 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
           <Card className="border-red-500/30">
             <CardContent className="pt-3 pb-2">
               <div className="text-xl font-bold text-red-500">{invalidCount}</div>
-              <p className="text-[10px] text-muted-foreground">Невалидных (API)</p>
-            </CardContent>
-          </Card>
-          <Card className="border-yellow-500/30">
-            <CardContent className="pt-3 pb-2">
-              <div className="text-xl font-bold text-yellow-500">{unknownCount}</div>
-              <p className="text-[10px] text-muted-foreground">Неизвестно</p>
+              <p className="text-[10px] text-muted-foreground">Невалидных</p>
             </CardContent>
           </Card>
         </div>
@@ -929,10 +921,10 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
                   </TableCell>
                   <TableCell className="py-2">
                     <Badge 
-                      variant={result.validNumber === "valid" ? "default" : result.validNumber === "invalid" ? "destructive" : "secondary"}
+                      variant={result.validNumber === "valid" ? "default" : "destructive"}
                       className="text-[10px] px-1.5 py-0"
                     >
-                      {result.validNumber === "valid" ? "✓" : result.validNumber === "invalid" ? "✗" : "?"}
+                      {result.validNumber === "valid" ? "✓" : "✗"}
                     </Badge>
                   </TableCell>
                   <TableCell className="py-2">
