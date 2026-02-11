@@ -556,3 +556,5 @@
 ## Bug Fixes
 - [x] Fix: Page constantly auto-refreshes (WebSocket/Vite HMR conflict + tsx watch drizzle migration loop)
 - [x] Fix: When validity is not confirmed (valid_number != "valid"), status should show "Невалид" (invalid) instead of "Неизвестно" (unknown)
+- [x] Fix: Horizontal scrollbar should be always visible in viewport (sticky), not only at the bottom of the table
+- [x] Add Shift+mouse wheel support for horizontal scrolling in tables

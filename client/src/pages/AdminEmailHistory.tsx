@@ -58,6 +58,7 @@ import {
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 type SortField = "createdAt" | "userName" | "totalEmails" | "validEmails";
 type SortDirection = "asc" | "desc";
@@ -303,7 +304,7 @@ export default function AdminEmailHistory() {
                 <p>{t.history?.noBatches || "No email checks found"}</p>
               </div>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <StickyScrollbar className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -401,7 +402,7 @@ export default function AdminEmailHistory() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+              </StickyScrollbar>
             )}
           </CardContent>
         </Card>
@@ -424,7 +425,7 @@ export default function AdminEmailHistory() {
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : batchResultsQuery.data?.results ? (
-              <div className="rounded-md border overflow-x-auto">
+              <StickyScrollbar className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -447,7 +448,7 @@ export default function AdminEmailHistory() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+              </StickyScrollbar>
             ) : null}
 
             <DialogFooter>

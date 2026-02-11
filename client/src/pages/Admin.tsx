@@ -61,6 +61,7 @@ import {
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 type User = {
   id: number;
@@ -436,7 +437,7 @@ export default function Admin() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <StickyScrollbar className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -576,7 +577,7 @@ export default function Admin() {
                     )}
                   </TableBody>
                 </Table>
-              </div>
+              </StickyScrollbar>
             )}
           </CardContent>
         </Card>

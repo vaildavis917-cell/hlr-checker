@@ -252,30 +252,93 @@
   background: oklch(0.6 0 0 / 50%);
 }
 
-/* Table horizontal scroll - always visible scrollbar for better UX */
+/* Scrollbar inside StickyScrollbar content - hide native scrollbar since we use the sticky one */
+.scrollbar-table {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.scrollbar-table::-webkit-scrollbar {
+  height: 0;
+  display: none;
+}
+
+.scrollbar-table {
+  scrollbar-width: none;
+}
+
+/* Sticky scrollbar at bottom of viewport */
+.sticky-scrollbar {
+  background: oklch(0.95 0 0);
+  border-top: 1px solid oklch(0.9 0 0);
+}
+
+.sticky-scrollbar::-webkit-scrollbar {
+  height: 14px;
+}
+
+.sticky-scrollbar::-webkit-scrollbar-track {
+  background: oklch(0.95 0 0);
+  border-radius: 7px;
+}
+
+.sticky-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.55 0 0 / 60%);
+  border-radius: 7px;
+  border: 3px solid oklch(0.95 0 0);
+}
+
+.sticky-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.4 0 0 / 80%);
+}
+
+.dark .sticky-scrollbar {
+  background: oklch(0.16 0.01 260);
+  border-top-color: oklch(0.25 0.01 260);
+}
+
+.dark .sticky-scrollbar::-webkit-scrollbar-track {
+  background: oklch(0.16 0.01 260);
+}
+
+.dark .sticky-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0 0 / 60%);
+  border-color: oklch(0.16 0.01 260);
+}
+
+.dark .sticky-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.65 0 0 / 80%);
+}
+
+/* Firefox sticky scrollbar */
+.sticky-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: oklch(0.55 0 0 / 60%) oklch(0.95 0 0);
+}
+
+.dark .sticky-scrollbar {
+  scrollbar-color: oklch(0.5 0 0 / 60%) oklch(0.16 0.01 260);
+}
+
+/* Fallback: regular overflow-x-auto containers that don't use StickyScrollbar */
 .overflow-x-auto {
   overflow-x: auto;
   overflow-y: visible;
-  scrollbar-gutter: stable;
 }
 
 .overflow-x-auto::-webkit-scrollbar {
-  height: 12px;
+  height: 10px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-track {
   background: oklch(0.95 0 0);
-  border-radius: 6px;
+  border-radius: 5px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
   background: oklch(0.7 0 0 / 50%);
-  border-radius: 6px;
+  border-radius: 5px;
   border: 2px solid oklch(0.95 0 0);
-}
-
-.overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.5 0 0 / 70%);
 }
 
 .dark .overflow-x-auto::-webkit-scrollbar-track {
@@ -285,20 +348,6 @@
 .dark .overflow-x-auto::-webkit-scrollbar-thumb {
   background: oklch(0.45 0 0 / 50%);
   border-color: oklch(0.18 0.01 260);
-}
-
-.dark .overflow-x-auto::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.55 0 0 / 70%);
-}
-
-/* Firefox scrollbar for horizontal scroll containers */
-.overflow-x-auto {
-  scrollbar-width: auto;
-  scrollbar-color: oklch(0.7 0 0 / 50%) oklch(0.95 0 0);
-}
-
-.dark .overflow-x-auto {
-  scrollbar-color: oklch(0.45 0 0 / 50%) oklch(0.18 0.01 260);
 }
 
 /* Smooth transitions for theme switching */

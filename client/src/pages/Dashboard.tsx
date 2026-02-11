@@ -14,6 +14,7 @@ import { useState } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import { toast } from "sonner";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 // GSM Error codes mapping with short labels
 const GSM_CODES: Record<string, { meaning: string; shortLabel: string; recommendation: string }> = {
@@ -453,7 +454,7 @@ function AdminBatchesView() {
       </div>
 
       {/* Batches table */}
-      <div className="rounded-md border overflow-x-auto">
+      <StickyScrollbar className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -566,7 +567,7 @@ function AdminBatchesView() {
             ))}
           </TableBody>
         </Table>
-      </div>
+      </StickyScrollbar>
       
       {filteredBatches.length > 20 && (
         <p className="text-sm text-muted-foreground text-center">

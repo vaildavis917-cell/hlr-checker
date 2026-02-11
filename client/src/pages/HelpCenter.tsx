@@ -22,6 +22,7 @@ import {
   Shield,
   Clock
 } from "lucide-react";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 export default function HelpCenter() {
   const { language } = useLanguage();
@@ -156,7 +157,7 @@ export default function HelpCenter() {
                 <CardDescription>{content.hlr.gsmCodes.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-x-auto">
+                <StickyScrollbar className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -179,7 +180,7 @@ export default function HelpCenter() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </StickyScrollbar>
               </CardContent>
             </Card>
 
@@ -193,7 +194,7 @@ export default function HelpCenter() {
                 <CardDescription>{content.hlr.numberTypes.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-x-auto">
+                <StickyScrollbar className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -222,7 +223,7 @@ export default function HelpCenter() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </StickyScrollbar>
                 <p className="text-sm text-muted-foreground mt-4">
                   {content.hlr.numberTypes.note}
                 </p>
@@ -391,7 +392,7 @@ export default function HelpCenter() {
                 <CardDescription>{content.email.quality.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-x-auto">
+                <StickyScrollbar className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -414,7 +415,7 @@ export default function HelpCenter() {
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                </StickyScrollbar>
               </CardContent>
             </Card>
 

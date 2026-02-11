@@ -47,6 +47,7 @@ import {
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 type SortField = "createdAt" | "userName" | "totalNumbers" | "validNumbers";
 type SortDirection = "asc" | "desc";
@@ -288,7 +289,7 @@ export default function History() {
                 </Button>
               </div>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <StickyScrollbar className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -422,7 +423,7 @@ export default function History() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+              </StickyScrollbar>
             )}
           </CardContent>
         </Card>

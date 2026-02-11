@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Redirect } from "wouter";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 const translations = {
   ru: {
@@ -369,7 +370,7 @@ export default function AuditLog() {
         ) : (
           <>
             <Card>
-              <CardContent className="p-0 overflow-x-auto">
+              <CardContent className="p-0"><StickyScrollbar>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -409,6 +410,7 @@ export default function AuditLog() {
                     ))}
                   </TableBody>
                 </Table>
+              </StickyScrollbar>
               </CardContent>
             </Card>
             

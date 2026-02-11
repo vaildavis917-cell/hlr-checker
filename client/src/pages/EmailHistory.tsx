@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 type SortField = "createdAt" | "userName" | "totalEmails" | "validEmails";
 type SortDirection = "asc" | "desc";
@@ -332,7 +333,7 @@ export default function EmailHistory() {
                 </Button>
               </div>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <StickyScrollbar className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -475,7 +476,7 @@ export default function EmailHistory() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+              </StickyScrollbar>
             )}
           </CardContent>
         </Card>

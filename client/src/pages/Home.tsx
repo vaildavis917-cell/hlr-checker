@@ -62,6 +62,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSearch } from "wouter";
 import { useBatchProgress } from "@/hooks/useWebSocket";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 type SortField = "phoneNumber" | "validNumber" | "currentCarrierName" | "countryName" | "roaming" | "ported" | "healthScore";
 type SortDirection = "asc" | "desc";
@@ -974,7 +975,7 @@ export default function Home() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="rounded-md border overflow-x-auto">
+                <StickyScrollbar className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1121,7 +1122,7 @@ export default function Home() {
                       )}
                     </TableBody>
                   </Table>
-                </div>
+                </StickyScrollbar>
               )}
             </CardContent>
           </Card>

@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 export default function EmailValidator() {
   const { t, language } = useLanguage();
@@ -491,7 +492,7 @@ export default function EmailValidator() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border overflow-x-auto">
+                  <StickyScrollbar className="rounded-md border">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -546,7 +547,7 @@ export default function EmailValidator() {
                         ))}
                       </TableBody>
                     </Table>
-                  </div>
+                  </StickyScrollbar>
                 </CardContent>
               </Card>
             </>

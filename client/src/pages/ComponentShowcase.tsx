@@ -172,6 +172,7 @@ import {
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
@@ -776,7 +777,7 @@ export default function ComponentsShowcase() {
                   </p>
                 </div>
                 <Separator />
-                <div className="space-y-2 overflow-x-auto">
+                <StickyScrollbar className="space-y-2">
                   <Label>Table</Label>
                   <Table>
                     <TableCaption>A list of your recent invoices.</TableCaption>
@@ -809,7 +810,7 @@ export default function ComponentsShowcase() {
                       </TableRow>
                     </TableBody>
                   </Table>
-                </div>
+                </StickyScrollbar>
                 <Separator />
                 <div className="space-y-2">
                   <Label>Menubar</Label>

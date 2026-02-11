@@ -57,6 +57,7 @@ import {
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import StickyScrollbar from "@/components/StickyScrollbar";
 
 // Permission category icons
 const categoryIcons: Record<string, React.ReactNode> = {
@@ -433,7 +434,7 @@ export default function RolesManagement() {
                "Built-in system roles (cannot be modified)"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent><StickyScrollbar>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -470,6 +471,7 @@ export default function RolesManagement() {
                 ))}
               </TableBody>
             </Table>
+          </StickyScrollbar>
           </CardContent>
         </Card>
         
@@ -486,7 +488,7 @@ export default function RolesManagement() {
                "User-defined roles with customizable permissions"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent>
             {customRoles.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <ShieldPlus className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -494,6 +496,7 @@ export default function RolesManagement() {
                 <p className="text-sm">{t.createFirst}</p>
               </div>
             ) : (
+              <StickyScrollbar>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -548,6 +551,7 @@ export default function RolesManagement() {
                   ))}
                 </TableBody>
               </Table>
+              </StickyScrollbar>
             )}
           </CardContent>
         </Card>
