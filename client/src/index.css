@@ -252,6 +252,55 @@
   background: oklch(0.6 0 0 / 50%);
 }
 
+/* Table horizontal scroll - always visible scrollbar for better UX */
+.overflow-x-auto {
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-gutter: stable;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 12px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: oklch(0.95 0 0);
+  border-radius: 6px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0 0 / 50%);
+  border-radius: 6px;
+  border: 2px solid oklch(0.95 0 0);
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0 0 / 70%);
+}
+
+.dark .overflow-x-auto::-webkit-scrollbar-track {
+  background: oklch(0.18 0.01 260);
+}
+
+.dark .overflow-x-auto::-webkit-scrollbar-thumb {
+  background: oklch(0.45 0 0 / 50%);
+  border-color: oklch(0.18 0.01 260);
+}
+
+.dark .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0 0 / 70%);
+}
+
+/* Firefox scrollbar for horizontal scroll containers */
+.overflow-x-auto {
+  scrollbar-width: auto;
+  scrollbar-color: oklch(0.7 0 0 / 50%) oklch(0.95 0 0);
+}
+
+.dark .overflow-x-auto {
+  scrollbar-color: oklch(0.45 0 0 / 50%) oklch(0.18 0.01 260);
+}
+
 /* Smooth transitions for theme switching */
 * {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;

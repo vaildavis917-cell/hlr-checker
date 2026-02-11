@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, gte, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, hlrBatches, hlrResults, InsertHlrBatch, InsertHlrResult, HlrBatch, HlrResult, inviteCodes, InsertInviteCode, InviteCode, User, actionLogs, InsertActionLog, ActionLog, balanceAlerts, BalanceAlert, exportTemplates, ExportTemplate, InsertExportTemplate, sessions, Session, InsertSession, accessRequests, AccessRequest, InsertAccessRequest, systemSettings, SystemSetting, emailBatches, EmailBatch, InsertEmailBatch, emailResults, EmailResult, InsertEmailResult, emailCache, EmailCache, InsertEmailCache, customRoles, CustomRole, InsertCustomRole } from "../drizzle/schema";
 import bcrypt from "bcryptjs";
@@ -952,7 +952,23 @@ export async function getIncompleteBatches(userId: number): Promise<HlrBatch[]> 
   return await db.select().from(hlrBatches)
     .where(and(
       eq(hlrBatches.userId, userId),
-      eq(hlrBatches.status, "processing")
+      or(
+        eq(hlrBatches.status, "processing"),
+        eq(hlrBatches.status, "paused")
+      )
+    ))
+    .orderBy(desc(hlrBatches.createdAt));
+}
+
+// Get ALL incomplete batches across all users (for auto-resume on server start)
+export async function getAllIncompleteBatches(): Promise<HlrBatch[]> {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(hlrBatches)
+    .where(or(
+      eq(hlrBatches.status, "processing"),
+      eq(hlrBatches.status, "paused")
     ))
     .orderBy(desc(hlrBatches.createdAt));
 }

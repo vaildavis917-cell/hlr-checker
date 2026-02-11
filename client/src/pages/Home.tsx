@@ -51,6 +51,14 @@ import CostCalculator from "@/components/CostCalculator";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
 import ExportTemplatesDialog from "@/components/ExportTemplatesDialog";
 import FileDropZone from "@/components/FileDropZone";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSearch } from "wouter";
 import { useBatchProgress } from "@/hooks/useWebSocket";
@@ -110,7 +118,11 @@ export default function Home() {
   const [singleResult, setSingleResult] = useState<any>(null);
   const [isSingleChecking, setIsSingleChecking] = useState(false);
   const [resumingBatchId, setResumingBatchId] = useState<number | null>(null);
+  const [showResumeDialog, setShowResumeDialog] = useState(false);
+  const [resumeDialogBatchId, setResumeDialogBatchId] = useState<number | null>(null);
+  const [resumePhoneInput, setResumePhoneInput] = useState("");
   const singleCheckMutation = trpc.hlr.checkSingle.useMutation();
+  const resumeBatchWithNumbersMutation = trpc.hlr.resumeBatchWithNumbers.useMutation();
   
   // API queries
   const userStatsQuery = trpc.hlr.getUserStats.useQuery();
@@ -211,24 +223,76 @@ export default function Home() {
     try {
       const result = await resumeBatchMutation.mutateAsync({ batchId });
       
+      if ((result as any).needsPhoneNumbers) {
+        // Old batch without saved originalNumbers - show dialog to upload numbers
+        setResumeDialogBatchId(batchId);
+        setResumePhoneInput("");
+        setShowResumeDialog(true);
+        setResumingBatchId(null);
+        return;
+      }
+      
       setCurrentBatchId(batchId);
+      setIsProcessing(true);
       batchesQuery.refetch();
       incompleteBatchesQuery.refetch();
       resultsQuery.refetch();
       
       if (!result.resumed) {
         toast.info(t.home.batchAlreadyComplete || "Проверка уже завершена");
+        setIsProcessing(false);
       } else {
         const processed = result.newlyChecked || 0;
         toast.success(
           `${t.home.resumeSuccessPrefix || "Проверка возобновлена. Обработано:"} ${processed}`
         );
+        setIsProcessing(false);
       }
     } catch (error: any) {
       const message = error?.message || t.home.resumeErrorMsg || "Не удалось возобновить проверку";
       toast.error(message);
+      setIsProcessing(false);
     } finally {
       setResumingBatchId(null);
+    }
+  };
+
+  // Resume batch with uploaded phone numbers (for old batches without originalNumbers)
+  const handleResumeWithNumbers = async () => {
+    if (!resumeDialogBatchId || !resumePhoneInput.trim()) return;
+    
+    const phoneNumbers = parsePhoneNumbers(resumePhoneInput);
+    if (phoneNumbers.length === 0) {
+      toast.error("Введите номера телефонов");
+      return;
+    }
+    
+    setShowResumeDialog(false);
+    setResumingBatchId(resumeDialogBatchId);
+    setIsProcessing(true);
+    setCurrentBatchId(resumeDialogBatchId);
+    
+    try {
+      const result = await resumeBatchWithNumbersMutation.mutateAsync({
+        batchId: resumeDialogBatchId,
+        phoneNumbers,
+      });
+      
+      batchesQuery.refetch();
+      incompleteBatchesQuery.refetch();
+      resultsQuery.refetch();
+      
+      if (result.resumed) {
+        toast.success(`Проверка возобновлена. Обработано: ${result.newlyChecked || 0}`);
+      } else {
+        toast.info("Все номера уже проверены");
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Не удалось возобновить проверку");
+    } finally {
+      setResumingBatchId(null);
+      setIsProcessing(false);
+      setResumeDialogBatchId(null);
     }
   };
 
@@ -1064,6 +1128,47 @@ export default function Home() {
           </Card>
         )}
       </div>
+      {/* Resume Dialog for old batches without originalNumbers */}
+      <Dialog open={showResumeDialog} onOpenChange={setShowResumeDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Возобновление проверки</DialogTitle>
+            <DialogDescription>
+              Этот батч был создан до обновления и не содержит сохранённых номеров.
+              Загрузите файл или вставьте номера для возобновления проверки.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <FileDropZone
+              onFileLoaded={(numbers: string[]) => setResumePhoneInput(numbers.join("\n"))}
+            />
+            <div className="text-center text-sm text-muted-foreground">или</div>
+            <Textarea
+              placeholder="Вставьте номера (каждый с новой строки или через запятую)"
+              value={resumePhoneInput}
+              onChange={(e) => setResumePhoneInput(e.target.value)}
+              rows={6}
+            />
+            {resumePhoneInput && (
+              <p className="text-sm text-muted-foreground">
+                {parsePhoneNumbers(resumePhoneInput).length} номеров найдено
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResumeDialog(false)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={handleResumeWithNumbers}
+              disabled={!resumePhoneInput.trim() || parsePhoneNumbers(resumePhoneInput).length === 0}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Возобновить проверку
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -156,7 +156,7 @@ export default function HelpCenter() {
                 <CardDescription>{content.hlr.gsmCodes.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-hidden">
+                <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -193,7 +193,7 @@ export default function HelpCenter() {
                 <CardDescription>{content.hlr.numberTypes.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-hidden">
+                <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -391,7 +391,7 @@ export default function HelpCenter() {
                 <CardDescription>{content.email.quality.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-hidden">
+                <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>

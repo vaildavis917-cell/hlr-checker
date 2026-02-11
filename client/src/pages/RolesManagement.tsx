@@ -433,7 +433,7 @@ export default function RolesManagement() {
                "Built-in system roles (cannot be modified)"}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -486,7 +486,7 @@ export default function RolesManagement() {
                "User-defined roles with customizable permissions"}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             {customRoles.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <ShieldPlus className="h-12 w-12 mx-auto mb-4 opacity-50" />

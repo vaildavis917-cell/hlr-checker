@@ -176,6 +176,8 @@ export default function History() {
         return <Badge variant="destructive">{t.home.statusInvalid}</Badge>;
       case "processing":
         return <Badge variant="secondary">{t.home.processing}</Badge>;
+      case "paused":
+        return <Badge variant="outline">⏸ Пауза</Badge>;
       default:
         return <Badge variant="outline">{t.home.statusUnknown}</Badge>;
     }
@@ -286,7 +288,7 @@ export default function History() {
                 </Button>
               </div>
             ) : (
-              <div className="rounded-md border">
+              <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>

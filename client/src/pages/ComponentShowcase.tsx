@@ -776,7 +776,7 @@ export default function ComponentsShowcase() {
                   </p>
                 </div>
                 <Separator />
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-x-auto">
                   <Label>Table</Label>
                   <Table>
                     <TableCaption>A list of your recent invoices.</TableCaption>

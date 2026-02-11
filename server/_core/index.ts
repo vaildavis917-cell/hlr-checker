@@ -8,7 +8,7 @@ import { promisify } from "util";
 const execAsync = promisify(exec);
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
-import { appRouter } from "../routers";
+import { appRouter, autoResumeInterruptedBatches } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initWebSocket, closeAllConnections } from "./websocket";
@@ -218,6 +218,13 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Auto-resume interrupted batches after server is ready
+    setTimeout(() => {
+      autoResumeInterruptedBatches().catch(err => {
+        console.error("[AutoResume] Failed to auto-resume batches:", err);
+      });
+    }, 5000); // Wait 5 seconds after startup to let everything initialize
   });
   
   // Register shutdown handlers

@@ -47,6 +47,7 @@ import {
   getCachedResult,
   getCheckedPhoneNumbersInBatch,
   getIncompleteBatches,
+  getAllIncompleteBatches,
   createSession as createDbSession,
   getSessionsByUserId,
   deleteSession,
@@ -266,6 +267,188 @@ function detectDuplicates(phoneNumbers: string[]): { unique: string[]; duplicate
   });
   
   return { unique, duplicates };
+}
+
+// Background processing function for remaining numbers in a batch
+// Used by admin resume and auto-resume on server startup
+async function processRemainingNumbers(
+  batchId: number,
+  numbersToCheck: string[],
+  batch: { totalNumbers: number | null; validNumbers: number | null; invalidNumbers: number | null; processedNumbers: number | null }
+) {
+  let validCount = batch.validNumbers || 0;
+  let invalidCount = batch.invalidNumbers || 0;
+  let processedCount = batch.processedNumbers || 0;
+
+  console.log(`[BatchProcess] Starting batch #${batchId}: ${numbersToCheck.length} numbers remaining`);
+
+  for (let i = 0; i < numbersToCheck.length; i++) {
+    // Check if batch was paused by admin
+    if (isShutdownInProgress()) {
+      console.log(`[BatchProcess] Shutdown detected, stopping batch #${batchId} at ${processedCount}/${batch.totalNumbers}`);
+      await updateHlrBatch(batchId, {
+        processedNumbers: processedCount,
+        validNumbers: validCount,
+        invalidNumbers: invalidCount,
+      });
+      unregisterBatch(batchId);
+      return;
+    }
+
+    // Check if batch was paused (status changed to "paused")
+    if (i % 10 === 0 && i > 0) {
+      const currentBatch = await getHlrBatchById(batchId);
+      if (currentBatch && currentBatch.status === "paused") {
+        console.log(`[BatchProcess] Batch #${batchId} was paused by admin at ${processedCount}/${batch.totalNumbers}`);
+        unregisterBatch(batchId);
+        return;
+      }
+    }
+
+    const phone = numbersToCheck[i];
+    if (!phone) continue;
+
+    // Add delay between API calls to prevent rate limiting
+    if (i > 0) {
+      await sleep(150);
+    }
+
+    const hlrResponse = await performHlrLookup(phone);
+    processedCount++;
+
+    let resultData: InsertHlrResult;
+
+    if ("error" in hlrResponse) {
+      resultData = {
+        batchId,
+        phoneNumber: phone,
+        status: "error",
+        errorMessage: hlrResponse.error,
+      };
+      invalidCount++;
+    } else {
+      const invalidGsmCodes = ["1", "5", "9", "12"];
+      const gsmCode = hlrResponse.gsm_code?.toString();
+      const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
+      const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
+      const isValid = finalValidNumber === "valid";
+      if (isValid) validCount++;
+      else invalidCount++;
+
+      resultData = {
+        batchId,
+        phoneNumber: phone,
+        internationalFormat: hlrResponse.international_format_number,
+        nationalFormat: hlrResponse.national_format_number,
+        countryCode: hlrResponse.country_code,
+        countryName: hlrResponse.country_name,
+        countryPrefix: hlrResponse.country_prefix,
+        currentCarrierName: hlrResponse.current_carrier?.name,
+        currentCarrierCode: hlrResponse.current_carrier?.network_code,
+        currentCarrierCountry: hlrResponse.current_carrier?.country,
+        currentNetworkType: hlrResponse.current_carrier?.network_type,
+        originalCarrierName: hlrResponse.original_carrier?.name,
+        originalCarrierCode: hlrResponse.original_carrier?.network_code,
+        validNumber: finalValidNumber,
+        reachable: hlrResponse.reachable,
+        ported: hlrResponse.ported,
+        roaming: hlrResponse.roaming,
+        gsmCode: hlrResponse.gsm_code,
+        gsmMessage: hlrResponse.gsm_message,
+        status: "success",
+        rawResponse: hlrResponse as unknown as Record<string, unknown>,
+      };
+    }
+
+    await createHlrResult(resultData);
+
+    // Update progress every 10 numbers
+    if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
+      await updateHlrBatch(batchId, {
+        processedNumbers: processedCount,
+        validNumbers: validCount,
+        invalidNumbers: invalidCount,
+      });
+      updateBatchProgress(batchId, processedCount);
+
+      broadcastBatchProgress(batchId, {
+        processed: processedCount,
+        total: batch.totalNumbers || numbersToCheck.length,
+        valid: validCount,
+        invalid: invalidCount,
+        status: "processing",
+        currentItem: phone,
+      });
+    }
+  }
+
+  // Broadcast completion
+  broadcastBatchProgress(batchId, {
+    processed: processedCount,
+    total: batch.totalNumbers || numbersToCheck.length,
+    valid: validCount,
+    invalid: invalidCount,
+    status: "completed",
+  });
+
+  // Mark batch as completed
+  await updateHlrBatch(batchId, {
+    status: "completed",
+    processedNumbers: processedCount,
+    validNumbers: validCount,
+    invalidNumbers: invalidCount,
+    completedAt: new Date(),
+  });
+
+  unregisterBatch(batchId);
+  console.log(`[BatchProcess] Batch #${batchId} completed: ${processedCount} processed, ${validCount} valid, ${invalidCount} invalid`);
+}
+
+// Auto-resume interrupted batches on server startup
+export async function autoResumeInterruptedBatches() {
+  try {
+    const incompleteBatches = await getAllIncompleteBatches();
+    if (incompleteBatches.length === 0) {
+      console.log("[AutoResume] No interrupted batches found");
+      return;
+    }
+
+    console.log(`[AutoResume] Found ${incompleteBatches.length} interrupted batch(es), starting auto-resume...`);
+
+    for (const batch of incompleteBatches) {
+      if (!batch.originalNumbers || batch.originalNumbers.length === 0) {
+        console.log(`[AutoResume] Batch #${batch.id} has no saved originalNumbers, skipping`);
+        continue;
+      }
+
+      const checkedNumbers = await getCheckedPhoneNumbersInBatch(batch.id);
+      const numbersToCheck = batch.originalNumbers.filter(n => !checkedNumbers.has(n));
+
+      if (numbersToCheck.length === 0) {
+        console.log(`[AutoResume] Batch #${batch.id} - all numbers already checked, marking as completed`);
+        await updateHlrBatch(batch.id, {
+          status: "completed",
+          completedAt: new Date(),
+        });
+        continue;
+      }
+
+      console.log(`[AutoResume] Resuming batch #${batch.id}: ${numbersToCheck.length} numbers remaining`);
+
+      // Register for tracking
+      registerActiveBatch(batch.id, batch.totalNumbers || numbersToCheck.length);
+
+      // Process in background with a small delay between batches
+      processRemainingNumbers(batch.id, numbersToCheck, batch).catch(err => {
+        console.error(`[AutoResume] Error processing batch #${batch.id}:`, err);
+      });
+
+      // Wait 2 seconds between starting each batch to avoid overwhelming the API
+      await sleep(2000);
+    }
+  } catch (error) {
+    console.error("[AutoResume] Error during auto-resume:", error);
+  }
 }
 
 // Admin-only procedure (admin and manager roles)
@@ -504,6 +687,124 @@ const adminRouter = router({
       });
       return { success: true };
     }),
+
+  // Pause/interrupt a batch (admin only)
+  pauseBatch: adminProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const batch = await getHlrBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.status !== "processing") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Batch is not in processing state" });
+      }
+      await updateHlrBatch(input.batchId, {
+        status: "paused",
+      });
+      // Unregister from active batches tracking
+      unregisterBatch(input.batchId);
+      await logAction({
+        userId: ctx.user.id,
+        action: "admin_pause_batch",
+        details: `Admin paused batch #${input.batchId} (user #${batch.userId}), processed: ${batch.processedNumbers}/${batch.totalNumbers}`,
+      });
+      return { success: true, batchId: input.batchId };
+    }),
+
+  // Resume any user's batch (admin only)
+  resumeBatch: adminProcedure
+    .input(z.object({ batchId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const batch = await getHlrBatchById(input.batchId);
+      if (!batch) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
+      }
+      if (batch.status !== "processing" && batch.status !== "paused") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Batch cannot be resumed (status: " + batch.status + ")" });
+      }
+
+      // Get already checked phone numbers
+      const checkedNumbers = await getCheckedPhoneNumbersInBatch(input.batchId);
+      const totalNumbers = batch.totalNumbers || 0;
+      const alreadyChecked = checkedNumbers.size;
+      const remaining = totalNumbers - alreadyChecked;
+
+      if (remaining <= 0) {
+        await updateHlrBatch(input.batchId, {
+          status: "completed",
+          completedAt: new Date(),
+        });
+        return {
+          batchId: input.batchId,
+          resumed: false,
+          message: "All numbers already checked",
+          alreadyChecked,
+          remaining: 0,
+          needsPhoneNumbers: false,
+        };
+      }
+
+      // Try to use saved originalNumbers
+      if (batch.originalNumbers && batch.originalNumbers.length > 0) {
+        const numbersToCheck = batch.originalNumbers.filter(n => !checkedNumbers.has(n));
+
+        if (numbersToCheck.length === 0) {
+          await updateHlrBatch(input.batchId, {
+            status: "completed",
+            completedAt: new Date(),
+          });
+          return {
+            batchId: input.batchId,
+            resumed: false,
+            message: "All numbers already checked",
+            alreadyChecked,
+            remaining: 0,
+            needsPhoneNumbers: false,
+          };
+        }
+
+        // Set status back to processing
+        await updateHlrBatch(input.batchId, { status: "processing" });
+
+        // Register for tracking
+        registerActiveBatch(input.batchId, totalNumbers);
+
+        // Process remaining numbers in background
+        processRemainingNumbers(input.batchId, numbersToCheck, batch).catch(err => {
+          console.error(`[AutoResume] Error processing batch #${input.batchId}:`, err);
+        });
+
+        await logAction({
+          userId: ctx.user.id,
+          action: "admin_resume_batch",
+          details: `Admin resumed batch #${input.batchId} (user #${batch.userId}), remaining: ${numbersToCheck.length}`,
+        });
+
+        return {
+          batchId: input.batchId,
+          resumed: true,
+          alreadyChecked,
+          remaining: numbersToCheck.length,
+          needsPhoneNumbers: false,
+        };
+      }
+
+      // No saved originalNumbers
+      return {
+        batchId: input.batchId,
+        resumed: false,
+        alreadyChecked,
+        remaining,
+        needsPhoneNumbers: true,
+        message: `Batch has ${remaining} unchecked numbers but no saved original numbers list.`,
+      };
+    }),
+
+  // Get all incomplete batches (admin only)
+  getAllIncompleteBatches: adminProcedure.query(async () => {
+    return await getAllIncompleteBatches();
+  }),
 
   // =====================
   // Permissions Management
@@ -2566,8 +2867,13 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
         }
         
-        if (batch.status !== "processing") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Batch is not in processing state" });
+        if (batch.status !== "processing" && batch.status !== "paused") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Batch is not in processing or paused state" });
+        }
+        
+        // Set status back to processing if paused
+        if (batch.status === "paused") {
+          await updateHlrBatch(input.batchId, { status: "processing" });
         }
         
         // Get already checked phone numbers
@@ -2882,8 +3188,13 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "Batch not found" });
         }
         
-        if (batch.status !== "processing") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Batch is not in processing state" });
+        if (batch.status !== "processing" && batch.status !== "paused") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Batch is not in processing or paused state" });
+        }
+        
+        // Set status back to processing if paused
+        if (batch.status === "paused") {
+          await updateHlrBatch(input.batchId, { status: "processing" });
         }
         
         // Get already checked phone numbers

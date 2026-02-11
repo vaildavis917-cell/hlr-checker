@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2, Mail, CreditCard } from "lucide-react";
+import { Activity, CheckCircle, XCircle, Clock, TrendingUp, Wallet, Eye, User, FileText, Download, Trash2, Mail, CreditCard, Pause, Play } from "lucide-react";
 import { useState } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import HealthScoreBadge from "@/components/HealthScoreBadge";
@@ -304,6 +304,32 @@ function AdminBatchesView() {
       setDeletingBatchId(null);
     },
   });
+
+  const pauseBatchMutation = trpc.admin.pauseBatch.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Проверка #${data.batchId} приостановлена`);
+      utils.admin.listAllBatches.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Ошибка при приостановке");
+    },
+  });
+
+  const resumeBatchMutation = trpc.admin.resumeBatch.useMutation({
+    onSuccess: (data) => {
+      if (data.resumed) {
+        toast.success(`Проверка #${data.batchId} возобновлена (осталось: ${data.remaining})`);
+      } else if (data.needsPhoneNumbers) {
+        toast.error(`Невозможно возобновить — нет сохранённых номеров`);
+      } else {
+        toast.info(data.message || "Все номера уже проверены");
+      }
+      utils.admin.listAllBatches.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Ошибка при возобновлении");
+    },
+  });
   
   const handleDeleteBatch = (batchId: number) => {
     setDeletingBatchId(batchId);
@@ -321,7 +347,8 @@ function AdminBatchesView() {
       const matchesUser = userFilter === "all" || b.userName === userFilter;
       const matchesStatus = statusFilter === "all" || 
         (statusFilter === "completed" && b.status === "completed") ||
-        (statusFilter === "in_progress" && b.status !== "completed");
+        (statusFilter === "in_progress" && (b.status === "processing" || b.status === "pending")) ||
+        (statusFilter === "paused" && b.status === "paused");
       return matchesUser && matchesStatus;
     })
     ?.sort((a: any, b: any) => {
@@ -401,6 +428,7 @@ function AdminBatchesView() {
               <SelectItem value="all">Все статусы</SelectItem>
               <SelectItem value="completed">Завершено</SelectItem>
               <SelectItem value="in_progress">В процессе</SelectItem>
+              <SelectItem value="paused">Приостановлено</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -425,7 +453,7 @@ function AdminBatchesView() {
       </div>
 
       {/* Batches table */}
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -451,8 +479,8 @@ function AdminBatchesView() {
                 </TableCell>
                 <TableCell>{batch.totalNumbers}</TableCell>
                 <TableCell>
-                  <Badge variant={batch.status === 'completed' ? 'default' : 'secondary'}>
-                    {batch.status === 'completed' ? 'Завершено' : `${batch.progress}%`}
+                  <Badge variant={batch.status === 'completed' ? 'default' : batch.status === 'paused' ? 'outline' : 'secondary'}>
+                    {batch.status === 'completed' ? 'Завершено' : batch.status === 'paused' ? '⏸ Пауза' : `${batch.progress}%`}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
@@ -472,6 +500,32 @@ function AdminBatchesView() {
                       <Eye className="h-4 w-4 mr-1" />
                       {t.view}
                     </Button>
+
+                    {batch.status === 'processing' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                        disabled={pauseBatchMutation.isPending}
+                        onClick={() => pauseBatchMutation.mutate({ batchId: batch.id })}
+                        title="Приостановить проверку"
+                      >
+                        <Pause className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    {batch.status === 'paused' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        disabled={resumeBatchMutation.isPending}
+                        onClick={() => resumeBatchMutation.mutate({ batchId: batch.id })}
+                        title="Возобновить проверку"
+                      >
+                        <Play className="h-4 w-4" />
+                      </Button>
+                    )}
                     
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -813,8 +867,8 @@ function BatchResultsView({ batchId, batchName }: { batchId: number; batchName?:
         </Button>
       </div>
 
-      {/* Results table - compact view without horizontal scroll */}
-      <div className="rounded-md border max-h-[500px] overflow-y-auto">
+      {/* Results table - compact view with horizontal scroll */}
+      <div className="rounded-md border max-h-[500px] overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>

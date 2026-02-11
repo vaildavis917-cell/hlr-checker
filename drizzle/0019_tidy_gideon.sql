@@ -1,0 +1,1 @@
+ALTER TABLE `hlr_batches` MODIFY COLUMN `status` enum('pending','processing','completed','failed','paused') NOT NULL DEFAULT 'pending';

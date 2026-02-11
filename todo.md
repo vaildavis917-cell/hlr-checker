@@ -540,3 +540,15 @@
 - [x] Обновить backend resumeBatch для использования сохранённых номеров
 
 - [x] Fix Vite WebSocket HMR connection error through Manus proxy (добавлен hmr: { clientPort: 443, protocol: 'wss' })
+
+## Horizontal Scrollbar UX Fix
+- [x] Fix horizontal scrollbar in tables - enable scrolling from anywhere in the table area, not just at the bottom
+
+## Admin Batch Control & Auto-Resume
+- [x] Admin can resume any user's batch (bypass ownership check)
+- [x] Admin can pause/interrupt any user's batch
+- [x] Auto-resume interrupted batches on server startup (batches stuck in "processing" or "paused" state)
+- [x] Add resume/pause buttons in admin Dashboard UI
+- [x] Add "paused" status to hlr_batches enum
+- [x] User can resume paused batches from Home page
+- [x] Status filter includes "paused" in admin Dashboard

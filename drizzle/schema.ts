@@ -170,7 +170,7 @@ export const hlrBatches = mysqlTable("hlr_batches", {
   processedNumbers: int("processedNumbers").notNull().default(0),
   validNumbers: int("validNumbers").notNull().default(0),
   invalidNumbers: int("invalidNumbers").notNull().default(0),
-  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed", "paused"]).default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
   /** Original phone numbers for auto-resume (JSON array) */
