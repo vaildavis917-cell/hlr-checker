@@ -1,13 +1,29 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Loader2, Eye, EyeOff, Phone, Lock, User, Mail, MessageSquare, ArrowLeft, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  Eye,
+  EyeOff,
+  Phone,
+  Lock,
+  User,
+  Mail,
+  MessageSquare,
+  ArrowLeft,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -16,17 +32,19 @@ export default function Login() {
   const { t } = useLanguage();
   const [, setLocation] = useLocation();
   const { user, loading: authLoading, refresh } = useAuth();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
   const [isSetupMode, setIsSetupMode] = useState(false);
   const [showRequestForm, setShowRequestForm] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
-  
+
   // Setup form state
   const [setupName, setSetupName] = useState("");
   const [setupEmail, setSetupEmail] = useState("");
-  
+
   // Access request form state
   const [requestName, setRequestName] = useState("");
   const [requestTelegram, setRequestTelegram] = useState("");
@@ -48,23 +66,30 @@ export default function Login() {
     }
   }, [user, authLoading, setLocation]);
 
-  // SEO: Set page title and meta description
+  // SEO
   useEffect(() => {
-    document.title = isSetupMode 
+    document.title = isSetupMode
       ? "Первоначальная настройка - DataCheck Pro"
       : showRequestForm
-        ? "Запрос доступа - DataCheck Pro"
-        : "Вход - DataCheck Pro";
-    
-    const metaDescription = document.querySelector('meta[name="description"]');
+      ? "Запрос доступа - DataCheck Pro"
+      : "Вход - DataCheck Pro";
+
+    const metaDescription = document.querySelector(
+      'meta[name="description"]'
+    ) as HTMLMetaElement | null;
+
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Войдите в DataCheck Pro для проверки телефонных номеров и email адресов.');
+      metaDescription.setAttribute(
+        "content",
+        "Войдите в DataCheck Pro для проверки телефонных номеров и email адресов."
+      );
     }
   }, [isSetupMode, showRequestForm]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    e.stopPropagation();
+
     if (!username || !password) {
       toast.error("Введите имя пользователя и пароль");
       return;
@@ -76,17 +101,19 @@ export default function Login() {
       await refresh();
       setLocation("/");
     } catch (error: any) {
-      toast.error(error.message || t.auth.invalidCredentials);
+      toast.error(error?.message || t.auth.invalidCredentials);
     }
   };
 
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    e.stopPropagation();
+
     if (!username || !password) {
       toast.error("Введите имя пользователя и пароль");
       return;
     }
+
     if (password.length < 6) {
       toast.error("Пароль должен быть не менее 6 символов");
       return;
@@ -103,14 +130,15 @@ export default function Login() {
       await refresh();
       setLocation("/");
     } catch (error: any) {
-      toast.error(error.message || "Не удалось создать аккаунт администратора");
+      toast.error(error?.message || "Не удалось создать аккаунт администратора");
     }
   };
 
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!requestName) {
+    e.stopPropagation();
+
+    if (!requestName || !requestTelegram) {
       toast.error(t.accessRequest?.fillRequired || "Заполните обязательные поля");
       return;
     }
@@ -122,7 +150,9 @@ export default function Login() {
       });
       setRequestSubmitted(true);
     } catch (error: any) {
-      toast.error(error.message || t.accessRequest?.submitError || "Ошибка при отправке заявки");
+      toast.error(
+        error?.message || t.accessRequest?.submitError || "Ошибка при отправке заявки"
+      );
     }
   };
 
@@ -141,6 +171,7 @@ export default function Login() {
         <div className="absolute top-4 right-4">
           <LanguageSwitcher />
         </div>
+
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center">
@@ -151,13 +182,15 @@ export default function Login() {
                 {t.accessRequest?.submitted || "Заявка отправлена!"}
               </CardTitle>
               <CardDescription className="mt-2">
-                {t.accessRequest?.submittedDescription || "Ваша заявка на доступ отправлена администратору. Мы свяжемся с вами по указанному email после рассмотрения."}
+                {t.accessRequest?.submittedDescription ||
+                  "Ваша заявка на доступ отправлена администратору. Мы свяжемся с вами по указанному email после рассмотрения."}
               </CardDescription>
             </div>
           </CardHeader>
+
           <CardContent>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full"
               onClick={() => {
                 setShowRequestForm(false);
@@ -182,6 +215,7 @@ export default function Login() {
         <div className="absolute top-4 right-4">
           <LanguageSwitcher />
         </div>
+
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
             <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -192,14 +226,18 @@ export default function Login() {
                 {t.accessRequest?.title || "Запрос доступа"}
               </CardTitle>
               <CardDescription>
-                {t.accessRequest?.description || "Заполните форму для получения доступа к системе"}
+                {t.accessRequest?.description ||
+                  "Заполните форму для получения доступа к системе"}
               </CardDescription>
             </div>
           </CardHeader>
+
           <CardContent>
             <form onSubmit={handleSubmitRequest} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="requestName">{t.accessRequest?.name || "Имя"} *</Label>
+                <Label htmlFor="requestName">
+                  {t.accessRequest?.name || "Имя"} *
+                </Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -212,14 +250,19 @@ export default function Login() {
                   />
                 </div>
               </div>
-              
+
               <div className="space-y-2">
-                <Label htmlFor="requestTelegram">{t.accessRequest?.telegram || "Telegram"} *</Label>
+                <Label htmlFor="requestTelegram">
+                  {t.accessRequest?.telegram || "Telegram"} *
+                </Label>
                 <div className="relative">
                   <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="requestTelegram"
-                    placeholder={t.accessRequest?.telegramPlaceholder || "@username или +7999123456"}
+                    placeholder={
+                      t.accessRequest?.telegramPlaceholder ||
+                      "@username или +7999123456"
+                    }
                     value={requestTelegram}
                     onChange={(e) => setRequestTelegram(e.target.value)}
                     className="pl-10"
@@ -228,8 +271,8 @@ export default function Login() {
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full"
                 disabled={submitRequestMutation.isPending}
               >
@@ -238,10 +281,10 @@ export default function Login() {
                 ) : null}
                 {t.accessRequest?.submit || "Отправить заявку"}
               </Button>
-              
-              <Button 
+
+              <Button
                 type="button"
-                variant="ghost" 
+                variant="ghost"
                 className="w-full"
                 onClick={() => setShowRequestForm(false)}
               >
@@ -255,29 +298,32 @@ export default function Login() {
     );
   }
 
+  // Login / Setup screen
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/30 p-4 relative">
       <div className="absolute top-4 right-4">
         <LanguageSwitcher />
       </div>
+
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
             <Phone className="h-8 w-8 text-primary" />
           </div>
+
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
-                {isSetupMode ? "Первоначальная настройка" : t.auth.welcomeBack}
-              </h1>
+              {isSetupMode ? "Первоначальная настройка" : t.auth.welcomeBack}
+            </h1>
             <h2 className="sr-only">DataCheck Pro - Phone & Email Validation</h2>
             <CardDescription>
-              {isSetupMode 
+              {isSetupMode
                 ? "Создайте аккаунт администратора для начала работы"
-                : t.auth.signInToAccess
-              }
+                : t.auth.signInToAccess}
             </CardDescription>
           </div>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={isSetupMode ? handleSetup : handleLogin} className="space-y-4">
             <div className="space-y-2">
@@ -294,7 +340,7 @@ export default function Login() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">{t.auth.password}</Label>
               <div className="relative">
@@ -302,7 +348,11 @@ export default function Login() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder={isSetupMode ? "Создайте пароль (мин. 6 символов)" : t.auth.enterPassword}
+                  placeholder={
+                    isSetupMode
+                      ? "Создайте пароль (мин. 6 символов)"
+                      : t.auth.enterPassword
+                  }
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 pr-10"
@@ -313,7 +363,7 @@ export default function Login() {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword((v) => !v)}
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -335,6 +385,7 @@ export default function Login() {
                     onChange={(e) => setSetupName(e.target.value)}
                   />
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email (необязательно)</Label>
                   <Input
@@ -348,12 +399,12 @@ export default function Login() {
               </>
             )}
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full"
               disabled={loginMutation.isPending || setupMutation.isPending}
             >
-              {(loginMutation.isPending || setupMutation.isPending) ? (
+              {loginMutation.isPending || setupMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
               {isSetupMode ? "Создать аккаунт администратора" : t.auth.signIn}
@@ -365,8 +416,8 @@ export default function Login() {
               <p className="text-sm text-muted-foreground mb-3">
                 {t.accessRequest?.noAccount || "Нет аккаунта?"}
               </p>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full"
                 onClick={() => setShowRequestForm(true)}
               >
