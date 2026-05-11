@@ -1,271 +1,168 @@
-<p align="center">
-  <img src="client/public/favicon.svg" alt="DataCheck Pro Logo" width="80" height="80">
-</p>
+# hlr-checker
 
-<h1 align="center">DataCheck Pro</h1>
+Self-hosted phone-number (HLR) and email validation service. UI is branded as **DataCheck Pro**.
 
-<p align="center">
-  <strong>Профессиональный сервис валидации телефонных номеров и email адресов</strong>
-</p>
+- **HLR**: bulk lookups via [Seven.io](https://www.seven.io/) — operator, network type, validity, GSM error code, ported/roaming status, health score
+- **Email**: bulk validation via [MillionVerifier](https://www.millionverifier.com/) — good / bad / catch-all / unknown, role detection, free-provider detection
+- Admin panel with per-user role/limit/permission management, telegram notifications for access requests, action audit log
 
-<p align="center">
-  <a href="#features">Features</a> •
-  <a href="#quickstart">Quickstart</a> •
-  <a href="#env-config">Env</a> •
-  <a href="#security">Security</a> •
-  <a href="#changelog">Changelog</a> •
-  <a href="#license">License</a>
-</p>
+## Stack
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-2.5.1-blue" alt="Version">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/node-22+-brightgreen" alt="Node">
-</p>
+| Layer | What |
+|-------|------|
+| Frontend | React 19 + TypeScript, Vite, Tailwind 4, shadcn/ui, tRPC client, wouter |
+| Backend  | Node 22, Express 4, tRPC 11, WebSocket (`/ws`) for live batch progress |
+| DB       | MySQL 8 / TiDB via Drizzle ORM (auto-migration on boot) |
+| Auth     | httpOnly session cookie, bcrypt password hashing, account lockout after 5 failed logins |
+| Process  | pm2 (systemd-managed in production) |
 
----
+## Repository layout
 
-## Что даёт бизнесу
+```
+client/                    React app
+  src/pages/               Top-level pages (Home, EmailValidator, Admin, History, etc.)
+  src/hooks/useWebSocket   Subscribes to batch progress over WS
+  src/lib/trpc             tRPC client
+server/
+  _core/                   trpc setup, websocket server, context, cookies, env
+  routers/                 tRPC routers (one per domain — split from old monolith)
+    index.ts               appRouter assembly
+    hlr.ts                 HLR endpoints + EXPORT_FIELDS
+    email.ts               Email endpoints
+    admin.ts               adminProcedure + admin endpoints
+    auth.ts                Login / setup / sessions / login history
+    exportTemplates.ts     User export templates
+  batch.ts                 Shared batch workers (performHlrLookup,
+                           processRemainingNumbers, processRemainingEmails,
+                           autoResumeInterruptedBatches)
+  routers.ts               Backwards-compat barrel re-exporting from routers/
+  db.ts                    All DB access (Drizzle queries)
+  auth.ts                  Login / session helpers
+  millionverifier.ts       MillionVerifier API client
+  telegram.ts              Telegram bot for access-request notifications
+  phoneUtils.ts            Phone normalization / duplicate detection
+drizzle/                   DB schema + migrations
+docs/                      Audit reports and historical notes
+```
 
-| Проблема | Решение DataCheck Pro |
-|----------|----------------------|
-| Высокие расходы на SMS по невалидным номерам | HLR проверка до отправки — экономия до 30% бюджета |
-| Высокий bounce rate email рассылок | Email валидация снижает отказы до минимума |
-| Грязная CRM-база с мёртвыми контактами | Bulk-проверка + Health Score для приоритизации |
-| Недоставки из-за портированных номеров | Определение текущего оператора и статуса портирования |
-| Антифрод: фейковые данные при регистрации | Single check в реальном времени для телефонов и email |
-| Нет понимания качества базы | Health Score 0–100 для каждого контакта |
+## Batch processing model
 
----
+Batches run **asynchronously** — the HTTP handler creates the batch row, fires the
+worker with `.catch()`, and returns. Progress is broadcast over WebSocket.
 
-## Features
+- `processRemainingNumbers` is the single HLR worker. It checks for graceful
+  shutdown and admin pause every 10 iterations and unwinds cleanly.
+- `processRemainingEmails` is the email equivalent.
+- On server start, `autoResumeInterruptedBatches` picks up any batch with status
+  `processing` or `paused`, flips paused → processing (the worker's pause check
+  would otherwise stop it on iteration 10), and hands it back to the worker.
 
-### HLR Проверка телефонов
+Don't add a fourth copy of the processing loop. Both the user's startBatch /
+resumeBatch endpoints and the admin's resumeBatch all delegate to these workers
+— pass `options.debitUserId` + `options.completionAction` for billing/logging.
 
-| Функция | Описание |
-|---------|----------|
-| **Single Check** | Мгновенная проверка одного номера с полным отчётом |
-| **Batch Check** | Загрузка CSV/TXT/Excel, до 10 000 номеров за раз |
-| **Дедупликация** | Автоматическое удаление дубликатов перед проверкой |
-| **Health Score** | Оценка качества номера 0–100 |
-| **GSM коды ошибок** | Расшифровка кодов (0-31) с рекомендациями |
-| **Экспорт CSV** | Выгрузка результатов с полными данными |
-| **Кэширование** | 24-часовой кэш результатов |
-| **Возобновление батчей** | Продолжение прерванных проверок |
+## Setup
 
-### Email Валидация
-
-| Функция | Описание |
-|---------|----------|
-| **Single Check** | Проверка одного email с детальным отчётом |
-| **Batch Check** | Массовая проверка до 10 000 адресов |
-| **Качество email** | Определение good/bad/catch_all/unknown |
-| **Категории** | Корпоративный / Бесплатный / Одноразовый |
-| **Disposable detection** | Обнаружение временных email сервисов |
-| **Экспорт результатов** | CSV/Excel с фильтрацией по качеству |
-
-### Админ-панель
-
-| Функция | Описание |
-|---------|----------|
-| **История всех пользователей** | Просмотр проверок всех пользователей |
-| **Фильтры истории** | Сортировка по дате, фильтр по статусу и пользователю |
-| **Удаление отчётов** | Удаление проверок с подтверждением |
-| **Управление пользователями** | Создание, редактирование, деактивация |
-| **Гибкие права доступа** | Настройка прав для каждого пользователя |
-| **Лимиты per-user** | Daily/monthly ограничения на количество проверок |
-| **Журнал действий** | Логирование всех действий пользователей |
-| **Заявки на доступ** | Система одобрения новых пользователей |
-
-### Пользовательский интерфейс
-
-| Функция | Описание |
-|---------|----------|
-| **Мультиязычность** | RU / UK / EN интерфейс |
-| **Тёмная/светлая тема** | Переключение в один клик |
-| **Help Center** | Встроенная документация с FAQ |
-| **Индикатор кэша** | Показывает когда результат из кэша |
-| **Прогресс-бары** | Визуальное отображение лимитов |
-| **Адаптивный дизайн** | Работает на всех устройствах |
-
-### Health Score Formula (HLR)
-
-Health Score рассчитывается по 5 параметрам:
-
-| Параметр | Баллы | Условие |
-|----------|-------|---------|
-| Validity | 40 | `valid` = 40, `unknown` = 20 |
-| Reachability | 25 | `reachable` = 25, `unknown` = 10 |
-| Ported | 15 | `not_ported` = 15, `ported` = 10 |
-| Roaming | 10 | `not_roaming` = 10, `roaming` = 5 |
-| Network Type | 10 | `mobile` = 10, `fixed_line_or_mobile` = 7 |
-
-**Итого: 0–100 баллов**
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, TypeScript, Tailwind CSS 4, shadcn/ui |
-| Backend | Express 4, tRPC 11 |
-| Database | MySQL / TiDB + Drizzle ORM |
-| Auth | JWT cookie session (httpOnly) + bcrypt |
-| HLR Provider | [Seven.io](https://www.seven.io/) |
-| Email Provider | [MillionVerifier](https://www.millionverifier.com/) |
-
----
-
-## Quickstart
-
-### Требования
-
-- Node.js 22+
-- pnpm 10+
-- MySQL 8+ или TiDB
-
-### Local Development
+Requirements: Node 22+, pnpm 10+, MySQL 8+ (or TiDB).
 
 ```bash
-# 1. Клонировать репозиторий
-git clone https://github.com/yourusername/datacheck-pro.git
-cd datacheck-pro
-
-# 2. Установить зависимости
+git clone git@github.com:vaildavis917-cell/hlr-checker.git
+cd hlr-checker
 pnpm install
-
-# 3. Настроить переменные окружения
-cp .env.example .env
-# Отредактировать .env (см. секцию Env Config)
-
-# 4. Запустить dev-сервер (миграции применяются автоматически)
-pnpm dev
+cp .env.example .env  # fill in the values below
+pnpm dev              # http://localhost:3000, migrations apply on first boot
 ```
 
-Откроется: `http://localhost:3000`
-
-### Production Build
+Production:
 
 ```bash
-# Сборка
 pnpm build
-
-# Запуск
-NODE_ENV=production pnpm start
+NODE_ENV=production node dist/index.js
+# or, via pm2 (see deployment section)
 ```
 
----
+## Env vars
 
-## Env Config
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `DATABASE_URL` | yes | `mysql://user:pass@host:3306/dbname` |
+| `JWT_SECRET` | yes | ≥32 chars; signs the session cookie |
+| `SEVEN_IO_API_KEY` | yes (for HLR) | Get from seven.io |
+| `MILLIONVERIFIER_API_KEY` | yes (for email) | Get from millionverifier.com |
+| `PORT` | no | Default 3000; auto-bumps if taken |
+| `VITE_OAUTH_PORTAL_URL` / `VITE_APP_ID` | no | Only set if integrating with the Manus OAuth portal; otherwise the app falls back to local `/login` |
 
-### Обязательные переменные
+## Deployment (current production setup)
 
-| Переменная | Описание | Пример |
-|------------|----------|--------|
-| `DATABASE_URL` | MySQL connection string | `mysql://user:pass@host:3306/datacheck` |
-| `JWT_SECRET` | Секрет для подписи JWT (min 32 символа) | `your-super-secret-key-here-32ch` |
-| `SEVEN_IO_API_KEY` | API ключ Seven.io для HLR | `abc123...` |
-| `MILLIONVERIFIER_API_KEY` | API ключ MillionVerifier для Email | `xyz789...` |
+The server (`data-chek.com`) runs the app under the `deploy` user, managed by pm2,
+which is brought up at boot by a systemd unit:
 
-### Опциональные переменные
+```ini
+# /etc/systemd/system/pm2-deploy.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=deploy
+Environment=PM2_HOME=/home/deploy/.pm2
+ExecStart=/usr/lib/node_modules/pm2/bin/pm2 resurrect
+ExecReload=/usr/lib/node_modules/pm2/bin/pm2 reload all
+ExecStop=/usr/lib/node_modules/pm2/bin/pm2 kill
+```
 
-| Переменная | Описание | По умолчанию |
-|------------|----------|--------------|
-| `VITE_APP_TITLE` | Название приложения | `DataCheck Pro` |
-| `VITE_APP_LOGO` | URL логотипа | — |
+Deploy flow:
 
----
+```bash
+ssh deploy@server
+cd /var/www/hlr-checker
+git pull
+pnpm install
+pnpm build
+pm2 reload hlr-checker
+pm2 save                       # persists the process list for next reboot
+```
 
-## GSM Error Codes (HLR)
+`nginx` terminates TLS and proxies to `127.0.0.1:3000`. WebSocket upgrade
+(`/ws`) is forwarded transparently — keep `proxy_set_header Upgrade` and
+`Connection "upgrade"` if you re-touch the config.
 
-| Код | Значение | Рекомендация |
-|-----|----------|--------------|
-| 0 | Успешно - номер валиден | Можно использовать |
-| 1 | Неизвестный абонент | Удалить из базы |
-| 6 | Абонент отсутствует | Повторить позже |
-| 7 | Входящие запрещены | Проверить вручную |
-| 8 | Роуминг запрещён | Номер в роуминге |
-| 11 | Teleservice не поддерживается | Проверить тип номера |
-| 13 | Вызов заблокирован | Номер заблокирован |
-| 21 | Нет ответа от сети | Повторить позже |
-| 27 | Абонент недоступен | Телефон выключен |
-| 31 | Сетевая ошибка | Повторить позже |
+## Health score (HLR)
 
----
+Computed per result, 0–100. Mostly used to rank a batch.
 
-## Email Quality Statuses
+| Component | Max | Awarded when |
+|-----------|-----|--------------|
+| Validity | 40 | `valid_number == "valid"` (20 for `unknown`) |
+| Reachability | 25 | `reachable == "reachable"` (10 for `unknown`) |
+| Ported | 15 | `ported == "not_ported"` (10 for `ported`) |
+| Roaming | 10 | `roaming == "not_roaming"` (5 for `roaming`) |
+| Network type | 10 | `mobile` (7 for `fixed_line_or_mobile`) |
 
-| Статус | Значение | Рекомендация |
-|--------|----------|--------------|
-| good | Email существует и принимает письма | ✅ Можно использовать |
-| catch_all | Сервер принимает все письма | ⚠️ Использовать с осторожностью |
-| bad | Email не существует или не работает | ❌ Удалить из базы |
-| unknown | Не удалось проверить | 🔄 Проверить позже |
+## GSM error codes
 
----
+| Code | Meaning | Action |
+|------|---------|--------|
+| 0 | Success | Use it |
+| 1 / 5 / 9 / 12 | Bad number / blocked | Treat as invalid (the batch worker does this automatically) |
+| 6 | Absent subscriber | Retry later |
+| 7 / 13 | Calls barred / blocked | Manual review |
+| 8 | Roaming barred | Likely roaming |
+| 11 | Teleservice unsupported | Wrong service type |
+| 21 / 31 | Network failure | Retry later |
+| 27 | Phone off / unreachable | Retry later |
 
-## Security
+## Tests
 
-| Мера | Описание |
-|------|----------|
-| **httpOnly cookies** | JWT хранится в httpOnly cookie, недоступен из JS |
-| **Account lockout** | Блокировка после 5 неудачных попыток входа на 15 минут |
-| **Per-user limits** | Daily/monthly лимиты на количество проверок |
-| **Role-based access** | Разделение admin/user с проверкой на сервере |
-| **Granular permissions** | Гибкая система прав доступа к функциям |
-| **Password hashing** | bcrypt с salt rounds = 10 |
-| **Auto migrations** | Миграции БД применяются автоматически при старте |
-| **Action logging** | Журналирование всех действий пользователей |
+```bash
+pnpm test           # vitest run, ~50s
+pnpm check          # tsc --noEmit
+```
 
----
-
-## Changelog
-
-См. [CHANGELOG.md](CHANGELOG.md) для полной истории изменений.
-
-### v2.4.0 (2026-02-04)
-
-- 🐛 **Email Router Permissions**: Исправлены неправильные проверки прав доступа
-- 🐛 **HLR Resume**: Исправлено возобновление прерванных проверок
-- 🔄 **Email Batch Name**: Поле названия теперь необязательное (автогенерация)
-
-### v2.3.0 (2026-02-03)
-
-- ✨ **Кастомные роли**: Создание собственных ролей с настраиваемыми правами
-- ✨ **Resume для Email батчей**: Возобновление прерванных email проверок
-- ✨ **Шаблоны экспорта Email**: Выбор полей для экспорта
-
-### v2.1.0 (2026-02-02)
-
-- ✨ **Admin Email History**: Просмотр истории email проверок всех пользователей для админов
-- ✨ **Раздельные меню истории**: HLR История и Email История в админ-меню
-- 🐛 **SEO**: Исправлен title страницы (20 → 60 символов)
-
-### v2.0.0 (2026-02-02)
-
-- ✨ **Email Validator**: Полноценная валидация email адресов (single + batch)
-- ✨ **Гибкие права доступа**: Настройка прав для каждого пользователя
-- ✨ **Журнал действий**: Логирование всех действий с фильтрами
-- ✨ **Заявки на доступ**: Система одобрения новых пользователей
-- ✨ **Управление сессиями**: Просмотр и завершение активных сессий
-- ✨ **Обновлённый Help Center**: Полная документация для HLR и Email
-- 🔄 **Ребрендинг**: HLR Bulk Checker → DataCheck Pro
-
----
+`server/batch.test.ts` covers the auto-resume bug fix and the worker's
+pause / shutdown handling. The older `*.test.ts` files mostly exercise
+auth and permission boundaries through `appRouter.createCaller(ctx)`. A few
+(`sevenio.test.ts`, `millionverifier.test.ts`) are integration checks that
+will fail unless the corresponding API key is in the env.
 
 ## License
 
-MIT License — см. [LICENSE](LICENSE) файл.
-
----
-
-## Author
-
-**@toskaqwe1** — [Telegram](https://t.me/toskaqwe1)
-
----
-
-<p align="center">
-  Made with ❤️ for clean databases
-</p>
+MIT — see [LICENSE](LICENSE).
