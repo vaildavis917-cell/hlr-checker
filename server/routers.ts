@@ -269,16 +269,29 @@ function detectDuplicates(phoneNumbers: string[]): { unique: string[]; duplicate
   return { unique, duplicates };
 }
 
-// Background processing function for remaining numbers in a batch
-// Used by admin resume and auto-resume on server startup
+// Background processing function for remaining numbers in a batch.
+// Used by startBatch, admin/user resume, and auto-resume on server startup.
+// The HTTP handler should fire this with .catch() and return immediately
+// so the request doesn't block for the entire batch.
+type ProcessRemainingOptions = {
+  // If set, calls incrementUserChecks(debitUserId, apiCallsMade) at successful completion.
+  debitUserId?: number;
+  // If set, calls logAction at successful completion with this action name.
+  completionAction?: string;
+  // Override the default completion log message.
+  completionDetails?: string;
+};
+
 async function processRemainingNumbers(
   batchId: number,
   numbersToCheck: string[],
-  batch: { totalNumbers: number | null; validNumbers: number | null; invalidNumbers: number | null; processedNumbers: number | null }
+  batch: { totalNumbers: number | null; validNumbers: number | null; invalidNumbers: number | null; processedNumbers: number | null },
+  options?: ProcessRemainingOptions
 ) {
   let validCount = batch.validNumbers || 0;
   let invalidCount = batch.invalidNumbers || 0;
   let processedCount = batch.processedNumbers || 0;
+  const initialProcessed = processedCount;
 
   console.log(`[BatchProcess] Starting batch #${batchId}: ${numbersToCheck.length} numbers remaining`);
 
@@ -401,6 +414,23 @@ async function processRemainingNumbers(
   });
 
   unregisterBatch(batchId);
+
+  const apiCallsMade = processedCount - initialProcessed;
+  if (options?.debitUserId && apiCallsMade > 0) {
+    await incrementUserChecks(options.debitUserId, apiCallsMade).catch(err =>
+      console.error(`[BatchProcess] Failed to increment user checks for batch #${batchId}:`, err)
+    );
+  }
+  if (options?.debitUserId && options?.completionAction) {
+    await logAction({
+      userId: options.debitUserId,
+      action: options.completionAction,
+      details: options.completionDetails ?? `Batch #${batchId}: ${processedCount} processed, ${validCount} valid, ${invalidCount} invalid`,
+    }).catch(err =>
+      console.error(`[BatchProcess] Failed to log completion for batch #${batchId}:`, err)
+    );
+  }
+
   console.log(`[BatchProcess] Batch #${batchId} completed: ${processedCount} processed, ${validCount} valid, ${invalidCount} invalid`);
 }
 
@@ -435,6 +465,13 @@ export async function autoResumeInterruptedBatches() {
 
       console.log(`[AutoResume] Resuming batch #${batch.id}: ${numbersToCheck.length} numbers remaining`);
 
+      // Flip paused -> processing BEFORE handing to the worker. Otherwise the
+      // worker's mid-loop "is this batch still paused?" check trips on iteration 10
+      // and bails out immediately, leaving the batch looking frozen.
+      if (batch.status === "paused") {
+        await updateHlrBatch(batch.id, { status: "processing" });
+      }
+
       // Register for tracking
       registerActiveBatch(batch.id, batch.totalNumbers || numbersToCheck.length);
 
@@ -449,6 +486,159 @@ export async function autoResumeInterruptedBatches() {
   } catch (error) {
     console.error("[AutoResume] Error during auto-resume:", error);
   }
+}
+
+// Background processing function for remaining emails in a batch.
+// Mirror of processRemainingNumbers but for email verification flow.
+async function processRemainingEmails(
+  batchId: number,
+  emailsToProcess: string[],
+  batch: {
+    totalEmails: number | null;
+    processedEmails: number | null;
+    validEmails: number | null;
+    invalidEmails: number | null;
+    riskyEmails: number | null;
+    unknownEmails: number | null;
+  },
+  options?: {
+    debitUserId?: number;
+    completionAction?: string;
+    completionDetails?: string;
+  }
+) {
+  const apiKey = process.env.MILLIONVERIFIER_API_KEY;
+  if (!apiKey) {
+    console.error(`[EmailBatch] API key not configured for batch #${batchId}`);
+    return;
+  }
+
+  let processed = batch.processedEmails || 0;
+  let valid = batch.validEmails || 0;
+  let invalid = batch.invalidEmails || 0;
+  let risky = batch.riskyEmails || 0;
+  let unknown = batch.unknownEmails || 0;
+  let apiCallsMade = 0;
+
+  console.log(`[EmailBatch] Starting batch #${batchId}: ${emailsToProcess.length} emails remaining`);
+
+  const cacheMap = await getEmailsFromCacheBulk(emailsToProcess);
+
+  for (const email of emailsToProcess) {
+    if (isShutdownInProgress()) {
+      console.log(`[EmailBatch] Shutdown detected, stopping batch #${batchId} at ${processed}/${batch.totalEmails}`);
+      await updateEmailBatchProgress(batchId, processed, valid, invalid, risky, unknown);
+      return;
+    }
+
+    const cached = cacheMap.get(email);
+    if (cached) {
+      await saveEmailResult({
+        batchId,
+        email,
+        quality: cached.quality || "unknown",
+        result: cached.result || "unknown",
+        resultCode: cached.resultCode || 0,
+        subresult: cached.subresult || "",
+        isFree: cached.isFree || false,
+        isRole: cached.isRole || false,
+        didYouMean: cached.didYouMean || "",
+        executionTime: 0,
+      });
+      const status = getResultStatus(cached.result || "unknown");
+      if (status === "valid") valid++;
+      else if (status === "invalid") invalid++;
+      else if (status === "risky") risky++;
+      else unknown++;
+    } else {
+      try {
+        const result = await verifyEmail(email, apiKey);
+        await saveEmailResult({
+          batchId,
+          email: result.email,
+          quality: result.quality,
+          result: result.result,
+          resultCode: result.resultcode,
+          subresult: result.subresult,
+          isFree: result.free,
+          isRole: result.role,
+          didYouMean: result.didyoumean,
+          executionTime: result.executiontime,
+        });
+        await saveEmailToCache({
+          email,
+          quality: result.quality,
+          result: result.result,
+          resultCode: result.resultcode,
+          subresult: result.subresult,
+          isFree: result.free,
+          isRole: result.role,
+          didYouMean: result.didyoumean,
+        });
+        const status = getResultStatus(result.result);
+        if (status === "valid") valid++;
+        else if (status === "invalid") invalid++;
+        else if (status === "risky") risky++;
+        else unknown++;
+      } catch (error) {
+        await saveEmailResult({
+          batchId,
+          email,
+          quality: "bad",
+          result: "error",
+          resultCode: 0,
+          subresult: "",
+          isFree: false,
+          isRole: false,
+          didYouMean: "",
+          executionTime: 0,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        invalid++;
+      }
+      apiCallsMade++;
+      await sleep(100);
+    }
+
+    processed++;
+    await updateEmailBatchProgress(batchId, processed, valid, invalid, risky, unknown);
+
+    broadcastBatchProgress(batchId, {
+      processed,
+      total: batch.totalEmails || emailsToProcess.length,
+      valid,
+      invalid,
+      status: "processing",
+      currentItem: email,
+    });
+  }
+
+  broadcastBatchProgress(batchId, {
+    processed,
+    total: batch.totalEmails || emailsToProcess.length,
+    valid,
+    invalid,
+    status: "completed",
+  });
+
+  await completeEmailBatch(batchId);
+
+  if (options?.debitUserId && apiCallsMade > 0) {
+    await incrementUserChecks(options.debitUserId, apiCallsMade, 'email').catch(err =>
+      console.error(`[EmailBatch] Failed to increment user checks for batch #${batchId}:`, err)
+    );
+  }
+  if (options?.debitUserId && options?.completionAction) {
+    await logAction({
+      userId: options.debitUserId,
+      action: options.completionAction,
+      details: options.completionDetails ?? `Email batch #${batchId}: ${processed} processed, ${valid} valid, ${invalid} invalid, ${risky} risky, ${unknown} unknown`,
+    }).catch(err =>
+      console.error(`[EmailBatch] Failed to log completion for batch #${batchId}:`, err)
+    );
+  }
+
+  console.log(`[EmailBatch] Batch #${batchId} completed: ${processed} processed, ${valid} valid, ${invalid} invalid, ${risky} risky, ${unknown} unknown`);
 }
 
 // Admin-only procedure (admin and manager roles)
@@ -1470,146 +1660,31 @@ const emailRouter = router({
         userAgent: ctx.req.headers["user-agent"] || "unknown",
       });
 
-      // Check cache for existing results
-      const cacheMap = await getEmailsFromCacheBulk(validEmails);
-
-      // Process emails
-      let processed = 0;
-      let valid = 0;
-      let invalid = 0;
-      let risky = 0;
-      let unknown = 0;
-
-      for (const email of validEmails) {
-        const trimmedEmail = email.trim().toLowerCase();
-        
-        // Check if cached
-        const cached = cacheMap.get(trimmedEmail);
-        if (cached) {
-          // Use cached result
-          await saveEmailResult({
-            batchId,
-            email: trimmedEmail,
-            quality: cached.quality || "unknown",
-            result: cached.result || "unknown",
-            resultCode: cached.resultCode || 0,
-            subresult: cached.subresult || "",
-            isFree: cached.isFree || false,
-            isRole: cached.isRole || false,
-            didYouMean: cached.didYouMean || "",
-            executionTime: 0,
-          });
-
-          const status = getResultStatus(cached.result || "unknown");
-          if (status === "valid") valid++;
-          else if (status === "invalid") invalid++;
-          else if (status === "risky") risky++;
-          else unknown++;
-        } else {
-          // Verify via API
-          try {
-            const result = await verifyEmail(trimmedEmail, apiKey);
-
-            await saveEmailResult({
-              batchId,
-              email: result.email,
-              quality: result.quality,
-              result: result.result,
-              resultCode: result.resultcode,
-              subresult: result.subresult,
-              isFree: result.free,
-              isRole: result.role,
-              didYouMean: result.didyoumean,
-              executionTime: result.executiontime,
-            });
-
-            // Save to cache
-            await saveEmailToCache({
-              email: trimmedEmail,
-              quality: result.quality,
-              result: result.result,
-              resultCode: result.resultcode,
-              subresult: result.subresult,
-              isFree: result.free,
-              isRole: result.role,
-              didYouMean: result.didyoumean,
-            });
-
-            const status = getResultStatus(result.result);
-            if (status === "valid") valid++;
-            else if (status === "invalid") invalid++;
-            else if (status === "risky") risky++;
-            else unknown++;
-          } catch (error) {
-            // Save error result
-            await saveEmailResult({
-              batchId,
-              email: trimmedEmail,
-              quality: "bad",
-              result: "error",
-              resultCode: 0,
-              subresult: "",
-              isFree: false,
-              isRole: false,
-              didYouMean: "",
-              executionTime: 0,
-              error: error instanceof Error ? error.message : "Unknown error",
-            });
-            invalid++;
-          }
-
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+      // Hand off to the background worker; HTTP handler returns immediately.
+      processRemainingEmails(
+        batchId,
+        validEmails,
+        {
+          totalEmails: validEmails.length,
+          processedEmails: 0,
+          validEmails: 0,
+          invalidEmails: 0,
+          riskyEmails: 0,
+          unknownEmails: 0,
+        },
+        {
+          debitUserId: ctx.user.id,
+          completionAction: "email_batch_complete",
+          completionDetails: `Batch: ${batchName}, ${validEmails.length} emails`,
         }
-
-        processed++;
-        await updateEmailBatchProgress(batchId, processed, valid, invalid, risky, unknown);
-        
-        // Broadcast progress via WebSocket
-        broadcastBatchProgress(batchId, {
-          processed,
-          total: validEmails.length,
-          valid,
-          invalid,
-          status: "processing",
-          currentItem: email,
-        });
-      }
-
-      // Broadcast completion via WebSocket
-      broadcastBatchProgress(batchId, {
-        processed: validEmails.length,
-        total: validEmails.length,
-        valid,
-        invalid,
-        status: "completed",
-      });
-
-      await completeEmailBatch(batchId);
-      
-      // Increment email checks counter (only for non-cached emails)
-      const apiCallCount = validEmails.length - Array.from(cacheMap.keys()).length;
-      if (apiCallCount > 0) {
-        await incrementUserChecks(ctx.user.id, apiCallCount, 'email');
-      }
-
-      // Log batch complete
-      await logAction({
-        userId: ctx.user.id,
-        action: "email_batch_complete",
-        details: `Batch: ${input.name}, Valid: ${valid}, Invalid: ${invalid}, Risky: ${risky}`,
-        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
-        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      ).catch(err => {
+        console.error(`[EmailBatch] Background processing failed for batch #${batchId}:`, err);
       });
 
       return {
         batchId,
         totalEmails: validEmails.length,
-        processed,
-        valid,
-        invalid,
-        risky,
-        unknown,
+        started: true,
       };
     }),
 
@@ -1923,137 +1998,19 @@ const emailRouter = router({
         userAgent: ctx.req.headers["user-agent"] || "unknown",
       });
 
-      // Check cache for existing results
-      const cacheMap = await getEmailsFromCacheBulk(remainingEmails);
-
-      // Process remaining emails
-      let processed = batch.processedEmails || 0;
-      let valid = batch.validEmails || 0;
-      let invalid = batch.invalidEmails || 0;
-      let risky = batch.riskyEmails || 0;
-      let unknown = batch.unknownEmails || 0;
-
-      for (const email of remainingEmails) {
-        const cached = cacheMap.get(email);
-        if (cached) {
-          await saveEmailResult({
-            batchId: input.batchId,
-            email,
-            quality: cached.quality || "unknown",
-            result: cached.result || "unknown",
-            resultCode: cached.resultCode || 0,
-            subresult: cached.subresult || "",
-            isFree: cached.isFree || false,
-            isRole: cached.isRole || false,
-            didYouMean: cached.didYouMean || "",
-            executionTime: 0,
-          });
-
-          const status = getResultStatus(cached.result || "unknown");
-          if (status === "valid") valid++;
-          else if (status === "invalid") invalid++;
-          else if (status === "risky") risky++;
-          else unknown++;
-        } else {
-          try {
-            const result = await verifyEmail(email, apiKey);
-
-            await saveEmailResult({
-              batchId: input.batchId,
-              email: result.email,
-              quality: result.quality,
-              result: result.result,
-              resultCode: result.resultcode,
-              subresult: result.subresult,
-              isFree: result.free,
-              isRole: result.role,
-              didYouMean: result.didyoumean,
-              executionTime: result.executiontime,
-            });
-
-            await saveEmailToCache({
-              email,
-              quality: result.quality,
-              result: result.result,
-              resultCode: result.resultcode,
-              subresult: result.subresult,
-              isFree: result.free,
-              isRole: result.role,
-              didYouMean: result.didyoumean,
-            });
-
-            const status = getResultStatus(result.result);
-            if (status === "valid") valid++;
-            else if (status === "invalid") invalid++;
-            else if (status === "risky") risky++;
-            else unknown++;
-          } catch (error) {
-            await saveEmailResult({
-              batchId: input.batchId,
-              email,
-              quality: "bad",
-              result: "error",
-              resultCode: 0,
-              subresult: "",
-              isFree: false,
-              isRole: false,
-              didYouMean: "",
-              executionTime: 0,
-              error: error instanceof Error ? error.message : "Unknown error",
-            });
-            invalid++;
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        processed++;
-        await updateEmailBatchProgress(input.batchId, processed, valid, invalid, risky, unknown);
-        
-        // Broadcast progress via WebSocket
-        broadcastBatchProgress(input.batchId, {
-          processed,
-          total: remainingEmails.length,
-          valid,
-          invalid,
-          status: "processing",
-          currentItem: email,
-        });
-      }
-
-      // Broadcast completion via WebSocket
-      broadcastBatchProgress(input.batchId, {
-        processed: remainingEmails.length,
-        total: remainingEmails.length,
-        valid,
-        invalid,
-        status: "completed",
-      });
-
-      await completeEmailBatch(input.batchId);
-
-      // Increment email checks counter
-      const apiCallCount = remainingEmails.length - Array.from(cacheMap.keys()).length;
-      if (apiCallCount > 0) {
-        await incrementUserChecks(ctx.user.id, apiCallCount, 'email');
-      }
-
-      await logAction({
-        userId: ctx.user.id,
-        action: "email_batch_resume_complete",
-        details: `Resumed batch: ${batch.name}, Processed: ${remainingEmails.length}`,
-        ipAddress: ctx.req.ip || ctx.req.headers["x-forwarded-for"]?.toString() || "unknown",
-        userAgent: ctx.req.headers["user-agent"] || "unknown",
+      // Hand off to the background worker; HTTP handler returns immediately.
+      processRemainingEmails(input.batchId, remainingEmails, batch, {
+        debitUserId: ctx.user.id,
+        completionAction: "email_batch_resume_complete",
+        completionDetails: `Resumed batch: ${batch.name}, Processed: ${remainingEmails.length}`,
+      }).catch(err => {
+        console.error(`[EmailBatch] Background resume failed for batch #${input.batchId}:`, err);
       });
 
       return {
         batchId: input.batchId,
         totalEmails: batch.totalEmails,
-        processed,
-        valid,
-        invalid,
-        risky,
-        unknown,
+        started: true,
         resumed: remainingEmails.length,
       };
     }),
@@ -2544,140 +2501,50 @@ export const appRouter = router({
           }
         }
 
-        // Then check remaining numbers via API
-        for (let i = 0; i < numbersToActuallyCheck.length; i++) {
-          // Check for graceful shutdown - stop processing but keep batch resumable
-          if (isShutdownInProgress()) {
-            console.log(`[Batch ${batchId}] Shutdown detected, stopping at ${processedCount}/${numbersToCheck.length}`);
-            await updateHlrBatch(batchId, {
-              processedNumbers: processedCount,
-              validNumbers: validCount,
-              invalidNumbers: invalidCount,
-              // Keep status as "processing" so it can be resumed
-            });
-            unregisterBatch(batchId);
-            return {
-              batchId,
-              totalProcessed: processedCount,
-              fromCache: cachedUsed,
-              apiCalls: i,
-              interrupted: true,
-              message: "Batch interrupted due to server shutdown. You can resume it later.",
-            };
-          }
-          
-          const phone = numbersToActuallyCheck[i];
-          if (!phone) continue;
-
-          // Add delay between API calls to prevent rate limiting
-          if (i > 0) {
-            await sleep(150); // 150ms delay between calls
-          }
-
-          const hlrResponse = await performHlrLookup(phone);
-          processedCount++;
-
-          // Prepare result object
-          let resultData: InsertHlrResult;
-
-          if ("error" in hlrResponse) {
-            resultData = {
-              batchId,
-              phoneNumber: phone,
-              status: "error",
-              errorMessage: hlrResponse.error,
-            };
-            invalidCount++;
-          } else {
-            // GSM codes 1, 5, 9, 12 indicate invalid numbers (Bad Number, Blocked)
-            const invalidGsmCodes = ["1", "5", "9", "12"];
-            const gsmCode = hlrResponse.gsm_code?.toString();
-            const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
-            
-            // Override validNumber based on GSM code
-            const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
-            const isValid = finalValidNumber === "valid";
-            if (isValid) validCount++;
-            else invalidCount++;
-
-            resultData = {
-              batchId,
-              phoneNumber: phone,
-              internationalFormat: hlrResponse.international_format_number,
-              nationalFormat: hlrResponse.national_format_number,
-              countryCode: hlrResponse.country_code,
-              countryName: hlrResponse.country_name,
-              countryPrefix: hlrResponse.country_prefix,
-              currentCarrierName: hlrResponse.current_carrier?.name,
-              currentCarrierCode: hlrResponse.current_carrier?.network_code,
-              currentCarrierCountry: hlrResponse.current_carrier?.country,
-              currentNetworkType: hlrResponse.current_carrier?.network_type,
-              originalCarrierName: hlrResponse.original_carrier?.name,
-              originalCarrierCode: hlrResponse.original_carrier?.network_code,
-              validNumber: finalValidNumber,
-              reachable: hlrResponse.reachable,
-              ported: hlrResponse.ported,
-              roaming: hlrResponse.roaming,
-              gsmCode: hlrResponse.gsm_code,
-              gsmMessage: hlrResponse.gsm_message,
-              status: "success",
-              rawResponse: hlrResponse as unknown as Record<string, unknown>,
-            };
-          }
-
-          // CRITICAL: Save result IMMEDIATELY after each check
-          await createHlrResult(resultData);
-
-          // Update progress every 10 numbers or at the end
-          if (processedCount % 10 === 0 || i === numbersToActuallyCheck.length - 1) {
-            await updateHlrBatch(batchId, {
-              processedNumbers: processedCount,
-              validNumbers: validCount,
-              invalidNumbers: invalidCount,
-            });
-            // Update graceful shutdown tracker
-            updateBatchProgress(batchId, processedCount);
-            
-            // Broadcast progress via WebSocket
-            broadcastBatchProgress(batchId, {
-              processed: processedCount,
-              total: numbersToCheck.length,
-              valid: validCount,
-              invalid: invalidCount,
-              status: "processing",
-              currentItem: numbersToActuallyCheck[i],
-            });
-          }
+        // Flush cache-derived progress before kicking off async work, so the UI
+        // can already show partial results while API calls run in the background.
+        if (cachedUsed > 0) {
+          await updateHlrBatch(batchId, {
+            processedNumbers: processedCount,
+            validNumbers: validCount,
+            invalidNumbers: invalidCount,
+          });
+          updateBatchProgress(batchId, processedCount);
+          broadcastBatchProgress(batchId, {
+            processed: processedCount,
+            total: numbersToCheck.length,
+            valid: validCount,
+            invalid: invalidCount,
+            status: "processing",
+          });
         }
 
-        // Broadcast completion via WebSocket
-        broadcastBatchProgress(batchId, {
-          processed: numbersToCheck.length,
-          total: numbersToCheck.length,
-          valid: validCount,
-          invalid: invalidCount,
-          status: "completed",
+        // Hand the API-bound numbers (or empty list, for completion) to the
+        // background worker. The HTTP handler returns immediately; progress
+        // arrives via WebSocket.
+        processRemainingNumbers(
+          batchId,
+          numbersToActuallyCheck,
+          {
+            totalNumbers: numbersToCheck.length,
+            validNumbers: validCount,
+            invalidNumbers: invalidCount,
+            processedNumbers: processedCount,
+          },
+          {
+            debitUserId: ctx.user.id,
+            completionAction: "batch_check",
+            completionDetails: `Checked ${numbersToCheck.length} numbers (${cachedUsed} from cache, ${skippedInvalid} invalid skipped, ${skippedDuplicates} duplicates skipped)`,
+          }
+        ).catch(err => {
+          console.error(`[StartBatch] Background processing failed for batch #${batchId}:`, err);
         });
 
-        // Mark batch as completed
-        await updateHlrBatch(batchId, {
-          status: "completed",
-          processedNumbers: numbersToCheck.length,
-          validNumbers: validCount,
-          invalidNumbers: invalidCount,
-          completedAt: new Date(),
-        });
-        
-        // Unregister from graceful shutdown tracker
-        unregisterBatch(batchId);
-        
-        // Increment user checks and log action (only count API calls, not cached)
-        await incrementUserChecks(ctx.user.id, numbersToActuallyCheck.length);
-        await logAction({ userId: ctx.user.id, action: "batch_check", details: `Checked ${numbersToCheck.length} numbers (${cachedUsed} from cache, ${skippedInvalid} invalid skipped, ${skippedDuplicates} duplicates skipped)` });
-
-        return { 
-          batchId, 
-          totalProcessed: numbersToCheck.length,
+        return {
+          batchId,
+          totalProcessed: processedCount,
+          totalNumbers: numbersToCheck.length,
+          started: true,
           fromCache: cachedUsed,
           apiCalls: numbersToActuallyCheck.length,
           skippedInvalid,
@@ -2904,120 +2771,45 @@ export const appRouter = router({
         if (input.phoneNumbers && input.phoneNumbers.length > 0) {
           // Filter out already checked numbers
           const numbersToCheck = input.phoneNumbers.filter(n => !checkedNumbers.has(n));
-          
+
           if (numbersToCheck.length === 0) {
             await updateHlrBatch(input.batchId, {
               status: "completed",
               completedAt: new Date(),
             });
-            return { 
-              batchId: input.batchId, 
-              resumed: false, 
+            return {
+              batchId: input.batchId,
+              resumed: false,
               message: "All provided numbers already checked",
               alreadyChecked: alreadyChecked,
               remaining: 0,
               needsPhoneNumbers: false,
             };
           }
-          
+
           // Check limits for remaining numbers
           const limitsCheck = await checkUserLimits(ctx.user.id, numbersToCheck.length);
           if (!limitsCheck.allowed) {
             throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
           }
-          
-          // Process remaining numbers
-          let validCount = batch.validNumbers || 0;
-          let invalidCount = batch.invalidNumbers || 0;
-          let processedCount = batch.processedNumbers || 0;
-          
-          for (let i = 0; i < numbersToCheck.length; i++) {
-            const phone = numbersToCheck[i];
-            if (!phone) continue;
 
-            // Add delay between API calls to prevent rate limiting
-            if (i > 0) {
-              await sleep(150);
-            }
+          registerActiveBatch(input.batchId, batch.totalNumbers || numbersToCheck.length);
 
-            const hlrResponse = await performHlrLookup(phone);
-            processedCount++;
-
-            let resultData: InsertHlrResult;
-
-            if ("error" in hlrResponse) {
-              resultData = {
-                batchId: input.batchId,
-                phoneNumber: phone,
-                status: "error",
-                errorMessage: hlrResponse.error,
-              };
-              invalidCount++;
-            } else {
-              const invalidGsmCodes = ["1", "5", "9", "12"];
-              const gsmCode = hlrResponse.gsm_code?.toString();
-              const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
-              const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
-              const isValid = finalValidNumber === "valid";
-              if (isValid) validCount++;
-              else invalidCount++;
-
-              resultData = {
-                batchId: input.batchId,
-                phoneNumber: phone,
-                internationalFormat: hlrResponse.international_format_number,
-                nationalFormat: hlrResponse.national_format_number,
-                countryCode: hlrResponse.country_code,
-                countryName: hlrResponse.country_name,
-                countryPrefix: hlrResponse.country_prefix,
-                currentCarrierName: hlrResponse.current_carrier?.name,
-                currentCarrierCode: hlrResponse.current_carrier?.network_code,
-                currentCarrierCountry: hlrResponse.current_carrier?.country,
-                currentNetworkType: hlrResponse.current_carrier?.network_type,
-                originalCarrierName: hlrResponse.original_carrier?.name,
-                originalCarrierCode: hlrResponse.original_carrier?.network_code,
-                validNumber: finalValidNumber,
-                reachable: hlrResponse.reachable,
-                ported: hlrResponse.ported,
-                roaming: hlrResponse.roaming,
-                gsmCode: hlrResponse.gsm_code,
-                gsmMessage: hlrResponse.gsm_message,
-                status: "success",
-                rawResponse: hlrResponse as unknown as Record<string, unknown>,
-              };
-            }
-
-            // Save result immediately
-            await createHlrResult(resultData);
-
-            // Update progress every 10 numbers
-            if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
-              await updateHlrBatch(input.batchId, {
-                processedNumbers: processedCount,
-                validNumbers: validCount,
-                invalidNumbers: invalidCount,
-              });
-            }
-          }
-
-          // Mark batch as completed
-          await updateHlrBatch(input.batchId, {
-            status: "completed",
-            processedNumbers: processedCount,
-            validNumbers: validCount,
-            invalidNumbers: invalidCount,
-            completedAt: new Date(),
+          processRemainingNumbers(input.batchId, numbersToCheck, batch, {
+            debitUserId: ctx.user.id,
+            completionAction: "resume_batch",
+            completionDetails: `Resumed batch ${input.batchId}, checked ${numbersToCheck.length} remaining numbers`,
+          }).catch(err => {
+            console.error(`[ResumeBatch] Background processing failed for batch #${input.batchId}:`, err);
           });
-          
-          await incrementUserChecks(ctx.user.id, numbersToCheck.length);
-          await logAction({ userId: ctx.user.id, action: "resume_batch", details: `Resumed batch ${input.batchId}, checked ${numbersToCheck.length} remaining numbers` });
 
-          return { 
-            batchId: input.batchId, 
+          return {
+            batchId: input.batchId,
             resumed: true,
-            alreadyChecked: alreadyChecked,
+            started: true,
+            alreadyChecked,
             newlyChecked: numbersToCheck.length,
-            totalProcessed: processedCount,
+            totalProcessed: batch.processedNumbers || 0,
             needsPhoneNumbers: false,
           };
         }
@@ -3026,138 +2818,45 @@ export const appRouter = router({
         if (batch.originalNumbers && batch.originalNumbers.length > 0) {
           // Filter out already checked numbers
           const numbersToCheck = batch.originalNumbers.filter(n => !checkedNumbers.has(n));
-          
+
           if (numbersToCheck.length === 0) {
             await updateHlrBatch(input.batchId, {
               status: "completed",
               completedAt: new Date(),
             });
-            return { 
-              batchId: input.batchId, 
-              resumed: false, 
+            return {
+              batchId: input.batchId,
+              resumed: false,
               message: "All numbers already checked",
               alreadyChecked: alreadyChecked,
               remaining: 0,
               needsPhoneNumbers: false,
             };
           }
-          
+
           // Check limits for remaining numbers
           const limitsCheck = await checkUserLimits(ctx.user.id, numbersToCheck.length);
           if (!limitsCheck.allowed) {
             throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
           }
-          
-          // Process remaining numbers using saved originalNumbers
-          let validCount = batch.validNumbers || 0;
-          let invalidCount = batch.invalidNumbers || 0;
-          let processedCount = batch.processedNumbers || 0;
-          
-          for (let i = 0; i < numbersToCheck.length; i++) {
-            const phone = numbersToCheck[i];
-            if (!phone) continue;
 
-            // Add delay between API calls to prevent rate limiting
-            if (i > 0) {
-              await sleep(150);
-            }
+          registerActiveBatch(input.batchId, batch.totalNumbers || numbersToCheck.length);
 
-            const hlrResponse = await performHlrLookup(phone);
-            processedCount++;
-
-            let resultData: InsertHlrResult;
-
-            if ("error" in hlrResponse) {
-              resultData = {
-                batchId: input.batchId,
-                phoneNumber: phone,
-                status: "error",
-                errorMessage: hlrResponse.error,
-              };
-              invalidCount++;
-            } else {
-              const invalidGsmCodes = ["1", "5", "9", "12"];
-              const gsmCode = hlrResponse.gsm_code?.toString();
-              const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
-              const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
-              const isValid = finalValidNumber === "valid";
-              if (isValid) validCount++;
-              else invalidCount++;
-
-              resultData = {
-                batchId: input.batchId,
-                phoneNumber: phone,
-                internationalFormat: hlrResponse.international_format_number,
-                nationalFormat: hlrResponse.national_format_number,
-                countryCode: hlrResponse.country_code,
-                countryName: hlrResponse.country_name,
-                countryPrefix: hlrResponse.country_prefix,
-                currentCarrierName: hlrResponse.current_carrier?.name,
-                currentCarrierCode: hlrResponse.current_carrier?.network_code,
-                currentCarrierCountry: hlrResponse.current_carrier?.country,
-                currentNetworkType: hlrResponse.current_carrier?.network_type,
-                originalCarrierName: hlrResponse.original_carrier?.name,
-                originalCarrierCode: hlrResponse.original_carrier?.network_code,
-                validNumber: finalValidNumber,
-                reachable: hlrResponse.reachable,
-                ported: hlrResponse.ported,
-                roaming: hlrResponse.roaming,
-                gsmCode: hlrResponse.gsm_code,
-                gsmMessage: hlrResponse.gsm_message,
-                status: "success",
-                rawResponse: hlrResponse as unknown as Record<string, unknown>,
-              };
-            }
-
-            await createHlrResult(resultData);
-
-            // Update progress every 10 numbers
-            if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
-              await updateHlrBatch(input.batchId, {
-                processedNumbers: processedCount,
-                validNumbers: validCount,
-                invalidNumbers: invalidCount,
-              });
-              
-              // Broadcast progress via WebSocket
-              broadcastBatchProgress(input.batchId, {
-                processed: processedCount,
-                total: batch.totalNumbers || numbersToCheck.length,
-                valid: validCount,
-                invalid: invalidCount,
-                status: "processing",
-                currentItem: phone,
-              });
-            }
-          }
-
-          // Broadcast completion
-          broadcastBatchProgress(input.batchId, {
-            processed: processedCount,
-            total: batch.totalNumbers || numbersToCheck.length,
-            valid: validCount,
-            invalid: invalidCount,
-            status: "completed",
+          processRemainingNumbers(input.batchId, numbersToCheck, batch, {
+            debitUserId: ctx.user.id,
+            completionAction: "auto_resume_batch",
+            completionDetails: `Auto-resumed batch ${input.batchId} using saved numbers, checked ${numbersToCheck.length} remaining numbers`,
+          }).catch(err => {
+            console.error(`[ResumeBatch] Background processing failed for batch #${input.batchId}:`, err);
           });
 
-          // Mark batch as completed
-          await updateHlrBatch(input.batchId, {
-            status: "completed",
-            processedNumbers: processedCount,
-            validNumbers: validCount,
-            invalidNumbers: invalidCount,
-            completedAt: new Date(),
-          });
-          
-          await incrementUserChecks(ctx.user.id, numbersToCheck.length);
-          await logAction({ userId: ctx.user.id, action: "auto_resume_batch", details: `Auto-resumed batch ${input.batchId} using saved numbers, checked ${numbersToCheck.length} remaining numbers` });
-
-          return { 
-            batchId: input.batchId, 
+          return {
+            batchId: input.batchId,
             resumed: true,
-            alreadyChecked: alreadyChecked,
+            started: true,
+            alreadyChecked,
             newlyChecked: numbersToCheck.length,
-            totalProcessed: processedCount,
+            totalProcessed: batch.processedNumbers || 0,
             needsPhoneNumbers: false,
             autoResumed: true,
           };
@@ -3223,100 +2922,24 @@ export const appRouter = router({
         if (!limitsCheck.allowed) {
           throw new TRPCError({ code: "FORBIDDEN", message: limitsCheck.reason || "Limit exceeded" });
         }
-        
-        // Process remaining numbers
-        let validCount = batch.validNumbers || 0;
-        let invalidCount = batch.invalidNumbers || 0;
-        let processedCount = batch.processedNumbers || 0;
-        
-        for (let i = 0; i < numbersToCheck.length; i++) {
-          const phone = numbersToCheck[i];
-          if (!phone) continue;
 
-          // Add delay between API calls to prevent rate limiting
-          if (i > 0) {
-            await sleep(150);
-          }
+        registerActiveBatch(input.batchId, batch.totalNumbers || numbersToCheck.length);
 
-          const hlrResponse = await performHlrLookup(phone);
-          processedCount++;
-
-          let resultData: InsertHlrResult;
-
-          if ("error" in hlrResponse) {
-            resultData = {
-              batchId: input.batchId,
-              phoneNumber: phone,
-              status: "error",
-              errorMessage: hlrResponse.error,
-            };
-            invalidCount++;
-          } else {
-            // GSM codes 1, 5, 9, 12 indicate invalid numbers (Bad Number, Blocked)
-            const invalidGsmCodes = ["1", "5", "9", "12"];
-            const gsmCode = hlrResponse.gsm_code?.toString();
-            const isInvalidByGsm = gsmCode && invalidGsmCodes.includes(gsmCode);
-            const finalValidNumber = isInvalidByGsm ? "invalid" : hlrResponse.valid_number;
-            const isValid = finalValidNumber === "valid";
-            if (isValid) validCount++;
-            else invalidCount++;
-
-            resultData = {
-              batchId: input.batchId,
-              phoneNumber: phone,
-              internationalFormat: hlrResponse.international_format_number,
-              nationalFormat: hlrResponse.national_format_number,
-              countryCode: hlrResponse.country_code,
-              countryName: hlrResponse.country_name,
-              countryPrefix: hlrResponse.country_prefix,
-              currentCarrierName: hlrResponse.current_carrier?.name,
-              currentCarrierCode: hlrResponse.current_carrier?.network_code,
-              currentCarrierCountry: hlrResponse.current_carrier?.country,
-              currentNetworkType: hlrResponse.current_carrier?.network_type,
-              originalCarrierName: hlrResponse.original_carrier?.name,
-              originalCarrierCode: hlrResponse.original_carrier?.network_code,
-              validNumber: finalValidNumber,
-              reachable: hlrResponse.reachable,
-              ported: hlrResponse.ported,
-              roaming: hlrResponse.roaming,
-              gsmCode: hlrResponse.gsm_code,
-              gsmMessage: hlrResponse.gsm_message,
-              status: "success",
-              rawResponse: hlrResponse as unknown as Record<string, unknown>,
-            };
-          }
-
-          // Save result immediately
-          await createHlrResult(resultData);
-
-          // Update progress every 10 numbers
-          if (processedCount % 10 === 0 || i === numbersToCheck.length - 1) {
-            await updateHlrBatch(input.batchId, {
-              processedNumbers: processedCount,
-              validNumbers: validCount,
-              invalidNumbers: invalidCount,
-            });
-          }
-        }
-
-        // Mark batch as completed
-        await updateHlrBatch(input.batchId, {
-          status: "completed",
-          processedNumbers: processedCount,
-          validNumbers: validCount,
-          invalidNumbers: invalidCount,
-          completedAt: new Date(),
+        processRemainingNumbers(input.batchId, numbersToCheck, batch, {
+          debitUserId: ctx.user.id,
+          completionAction: "resume_batch",
+          completionDetails: `Resumed batch ${input.batchId}, checked ${numbersToCheck.length} remaining numbers`,
+        }).catch(err => {
+          console.error(`[ResumeBatchWithNumbers] Background processing failed for batch #${input.batchId}:`, err);
         });
-        
-        await incrementUserChecks(ctx.user.id, numbersToCheck.length);
-        await logAction({ userId: ctx.user.id, action: "resume_batch", details: `Resumed batch ${input.batchId}, checked ${numbersToCheck.length} remaining numbers` });
 
-        return { 
-          batchId: input.batchId, 
+        return {
+          batchId: input.batchId,
           resumed: true,
+          started: true,
           alreadyChecked: checkedNumbers.size,
           newlyChecked: numbersToCheck.length,
-          totalProcessed: processedCount,
+          totalProcessed: batch.processedNumbers || 0,
         };
       }),
 

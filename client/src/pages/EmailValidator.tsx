@@ -132,19 +132,38 @@ export default function EmailValidator() {
 
   const startBatchMutation = trpc.email.startBatch.useMutation({
     onSuccess: (data) => {
-      toast.success(t.email?.batchCompleted || `Batch completed: ${data.valid} valid, ${data.invalid} invalid`);
+      // Backend now processes asynchronously. Subscribe to the batch's WS feed
+      // and let the completion effect below clear isProcessing.
+      setCurrentBatchId(data.batchId);
       utils.email.listBatches.invalidate();
       utils.email.getBalance.invalidate();
       setBatchEmails("");
       setBatchName("");
-      setIsProcessing(false);
-      setProgress(100);
+      toast.info(`Batch started: ${data.totalEmails} emails`);
     },
     onError: (error) => {
       toast.error(error.message);
       setIsProcessing(false);
     },
   });
+
+  // Clear isProcessing when the WebSocket reports the batch finished.
+  useEffect(() => {
+    if (!isProcessing) return;
+    if (batchProgress?.status === "completed") {
+      setIsProcessing(false);
+      setProgress(100);
+      utils.email.listBatches.invalidate();
+      utils.email.getBalance.invalidate();
+      toast.success(
+        t.email?.batchCompleted ||
+          `Batch completed: ${batchProgress.valid ?? 0} valid, ${batchProgress.invalid ?? 0} invalid`
+      );
+    } else if (batchProgress?.status === "error") {
+      setIsProcessing(false);
+      toast.error(batchProgress.error || "Batch failed");
+    }
+  }, [batchProgress?.status, batchProgress?.valid, batchProgress?.invalid, batchProgress?.error, isProcessing, utils.email.listBatches, utils.email.getBalance, t.email?.batchCompleted]);
 
   const deleteBatchMutation = trpc.email.deleteBatch.useMutation({
     onSuccess: () => {

@@ -113,7 +113,7 @@ export default function Home() {
   
   // WebSocket for real-time batch progress
   const batchProgress = useBatchProgress(isProcessing ? currentBatchId : null, user?.id);
-  
+
   // Single check state
   const [singlePhone, setSinglePhone] = useState("");
   const [singleResult, setSingleResult] = useState<any>(null);
@@ -153,6 +153,24 @@ export default function Home() {
   const startBatchMutation = trpc.hlr.startBatch.useMutation();
   const resumeBatchMutation = trpc.hlr.resumeBatch.useMutation();
 
+  // Clear isProcessing when the WebSocket reports the batch finished. The backend
+  // now processes asynchronously, so completion only arrives over the WS feed.
+  useEffect(() => {
+    if (!isProcessing) return;
+    if (batchProgress?.status === "completed") {
+      setIsProcessing(false);
+      batchesQuery.refetch();
+      resultsQuery.refetch();
+      incompleteBatchesQuery.refetch();
+      toast.success(
+        `Готово: ${batchProgress.valid ?? 0} валидных, ${batchProgress.invalid ?? 0} невалидных`
+      );
+    } else if (batchProgress?.status === "error") {
+      setIsProcessing(false);
+      toast.error(batchProgress.error || "Ошибка при проверке");
+    }
+  }, [batchProgress?.status, batchProgress?.valid, batchProgress?.invalid, batchProgress?.error, isProcessing]);
+
   // Parse phone numbers from input
   const parsePhoneNumbers = (input: string): string[] => {
     return input
@@ -188,7 +206,8 @@ export default function Home() {
     reader.readAsText(file);
   };
 
-  // Start HLR check
+  // Start HLR check. Backend now processes asynchronously - we subscribe to the
+  // batch's WebSocket feed and let the completion effect below clear isProcessing.
   const handleStartCheck = async () => {
     const numbers = parsePhoneNumbers(phoneInput);
     if (numbers.length === 0) {
@@ -196,62 +215,54 @@ export default function Home() {
       return;
     }
 
-    // No limit on number of phones
-
     setIsProcessing(true);
     try {
       const result = await startBatchMutation.mutateAsync({
         name: batchName || undefined,
         phoneNumbers: numbers,
       });
-      
+
       setCurrentBatchId(result.batchId);
       setPhoneInput("");
       setBatchName("");
       batchesQuery.refetch();
-      resultsQuery.refetch();
-      toast.success(`Обработано ${result.totalProcessed} номеров`);
+      toast.info(`Проверка запущена: ${result.totalNumbers ?? numbers.length} номеров`);
     } catch (error) {
       toast.error("Не удалось обработать номера");
-    } finally {
       setIsProcessing(false);
     }
   };
 
-  // Resume interrupted batch
+  // Resume interrupted batch (background processing kicks off, WS drives completion)
   const handleResumeBatch = async (batchId: number) => {
     setResumingBatchId(batchId);
     try {
       const result = await resumeBatchMutation.mutateAsync({ batchId });
-      
+
       if ((result as any).needsPhoneNumbers) {
-        // Old batch without saved originalNumbers - show dialog to upload numbers
         setResumeDialogBatchId(batchId);
         setResumePhoneInput("");
         setShowResumeDialog(true);
-        setResumingBatchId(null);
         return;
       }
-      
+
+      if (!result.resumed) {
+        toast.info(t.home.batchAlreadyComplete || "Проверка уже завершена");
+        batchesQuery.refetch();
+        incompleteBatchesQuery.refetch();
+        return;
+      }
+
       setCurrentBatchId(batchId);
       setIsProcessing(true);
       batchesQuery.refetch();
       incompleteBatchesQuery.refetch();
-      resultsQuery.refetch();
-      
-      if (!result.resumed) {
-        toast.info(t.home.batchAlreadyComplete || "Проверка уже завершена");
-        setIsProcessing(false);
-      } else {
-        const processed = result.newlyChecked || 0;
-        toast.success(
-          `${t.home.resumeSuccessPrefix || "Проверка возобновлена. Обработано:"} ${processed}`
-        );
-        setIsProcessing(false);
-      }
+      const remaining = result.newlyChecked || 0;
+      toast.info(
+        `${t.home.resumeSuccessPrefix || "Возобновлено. Осталось:"} ${remaining}`
+      );
     } catch (error: any) {
-      const message = error?.message || t.home.resumeErrorMsg || "Не удалось возобновить проверку";
-      toast.error(message);
+      toast.error(error?.message || t.home.resumeErrorMsg || "Не удалось возобновить проверку");
       setIsProcessing(false);
     } finally {
       setResumingBatchId(null);
@@ -261,38 +272,38 @@ export default function Home() {
   // Resume batch with uploaded phone numbers (for old batches without originalNumbers)
   const handleResumeWithNumbers = async () => {
     if (!resumeDialogBatchId || !resumePhoneInput.trim()) return;
-    
+
     const phoneNumbers = parsePhoneNumbers(resumePhoneInput);
     if (phoneNumbers.length === 0) {
       toast.error("Введите номера телефонов");
       return;
     }
-    
+
     setShowResumeDialog(false);
     setResumingBatchId(resumeDialogBatchId);
     setIsProcessing(true);
     setCurrentBatchId(resumeDialogBatchId);
-    
+
     try {
       const result = await resumeBatchWithNumbersMutation.mutateAsync({
         batchId: resumeDialogBatchId,
         phoneNumbers,
       });
-      
+
       batchesQuery.refetch();
       incompleteBatchesQuery.refetch();
-      resultsQuery.refetch();
-      
+
       if (result.resumed) {
-        toast.success(`Проверка возобновлена. Обработано: ${result.newlyChecked || 0}`);
+        toast.info(`Проверка возобновлена. Осталось: ${result.newlyChecked || 0}`);
       } else {
         toast.info("Все номера уже проверены");
+        setIsProcessing(false);
       }
     } catch (error: any) {
       toast.error(error?.message || "Не удалось возобновить проверку");
+      setIsProcessing(false);
     } finally {
       setResumingBatchId(null);
-      setIsProcessing(false);
       setResumeDialogBatchId(null);
     }
   };
