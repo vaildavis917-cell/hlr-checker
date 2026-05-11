@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import { createServer, Server } from "http";
 import net from "net";
 import { exec } from "child_process";
@@ -208,6 +208,16 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+
+  // Bot scanners send malformed URIs like /%c0/ which crash express's path decoder;
+  // return 400 quietly instead of letting the default handler dump the stack to stderr.
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof URIError) {
+      res.status(400).type("text/plain").send("Bad Request: malformed URI");
+      return;
+    }
+    next(err);
+  });
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
